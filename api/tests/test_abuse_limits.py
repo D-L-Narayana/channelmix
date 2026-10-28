@@ -20,7 +20,17 @@ def test_quota_blocks_oversized_import(client, monkeypatch):
     ws = client.post("/api/v1/workspaces", json={"name": "q", "email": "q@example.com"}).json()
     h = {"X-Api-Key": ws["api_key"]}
     rows = [
-        {"channel": "google", "external_id": "c1", "campaign_name": "c1", "day": f"2025-01-0{d}", "spend": 1, "impressions": 1, "clicks": 1, "conversions": 0, "revenue": 0}
+        {
+            "channel": "google",
+            "external_id": "c1",
+            "campaign_name": "c1",
+            "day": f"2025-01-0{d}",
+            "spend": 1,
+            "impressions": 1,
+            "clicks": 1,
+            "conversions": 0,
+            "revenue": 0,
+        }
         for d in (1, 2, 3)
     ]
     r = client.post("/api/v1/metrics/bulk", json={"rows": rows}, headers=h)

@@ -5,13 +5,14 @@ Revises: 0001_initial
 """
 
 import sqlalchemy as sa
-from alembic import op
 
+from alembic import op
 from app.db import SCHEMA
 
 
 def _schema() -> str | None:
     return None if op.get_bind().dialect.name == "sqlite" else SCHEMA
+
 
 revision = "0002_signup_events"
 down_revision = "0001_initial"

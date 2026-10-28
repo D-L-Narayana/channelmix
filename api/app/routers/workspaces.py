@@ -8,8 +8,7 @@ from sqlalchemy.orm import Session
 from app.auth import current_workspace, generate_api_key, hash_api_key, new_slug
 from app.config import get_settings
 from app.db import get_db
-from app.models import Campaign, DailyMetric, Import, SignupEvent, Workspace
-from app.models import utcnow
+from app.models import Campaign, DailyMetric, Import, SignupEvent, Workspace, utcnow
 from app.schemas import WorkspaceCreate, WorkspaceCreated, WorkspaceMe
 
 router = APIRouter(prefix="/workspaces", tags=["workspaces"])
@@ -22,15 +21,30 @@ def create_workspace(payload: WorkspaceCreate, request: Request, db: Session = D
     Throttled per caller IP and globally so the public signup cannot be used to fill the database.
     """
     settings = get_settings()
-    ip = (request.headers.get("x-forwarded-for") or "").split(",")[0].strip() or (request.client.host if request.client else "local")
+    ip = (request.headers.get("x-forwarded-for") or "").split(",")[0].strip() or (
+        request.client.host if request.client else "local"
+    )
     ip_hash = hashlib.sha256(f"channelmix-signup:{ip}".encode()).hexdigest()
     since = utcnow() - timedelta(hours=1)
-    per_ip = db.scalar(select(func.count()).select_from(SignupEvent).where(SignupEvent.ip_hash == ip_hash, SignupEvent.created_at >= since)) or 0
+    per_ip = (
+        db.scalar(
+            select(func.count())
+            .select_from(SignupEvent)
+            .where(SignupEvent.ip_hash == ip_hash, SignupEvent.created_at >= since)
+        )
+        or 0
+    )
     if per_ip >= settings.signup_per_ip_per_hour:
-        raise HTTPException(429, detail="Too many workspaces created from this address; try again in an hour.", headers={"Retry-After": "3600"})
+        raise HTTPException(
+            429,
+            detail="Too many workspaces created from this address; try again in an hour.",
+            headers={"Retry-After": "3600"},
+        )
     total_hour = db.scalar(select(func.count()).select_from(SignupEvent).where(SignupEvent.created_at >= since)) or 0
     if total_hour >= settings.signup_global_per_hour:
-        raise HTTPException(429, detail="Signup is temporarily paused; try again later.", headers={"Retry-After": "3600"})
+        raise HTTPException(
+            429, detail="Signup is temporarily paused; try again later.", headers={"Retry-After": "3600"}
+        )
     total = db.scalar(select(func.count()).select_from(Workspace)) or 0
     if total >= settings.max_workspaces:
         raise HTTPException(503, detail="Workspace capacity reached; contact the maintainer.")

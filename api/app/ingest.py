@@ -155,11 +155,19 @@ def ingest(
     from app.config import get_settings
 
     quota = get_settings().max_metric_rows_per_workspace
-    current = db.scalar(
-        select(func.count(DailyMetric.id)).join(Campaign, Campaign.id == DailyMetric.campaign_id).where(Campaign.workspace_id == workspace_id)
-    ) or 0
+    current = (
+        db.scalar(
+            select(func.count(DailyMetric.id))
+            .join(Campaign, Campaign.id == DailyMetric.campaign_id)
+            .where(Campaign.workspace_id == workspace_id)
+        )
+        or 0
+    )
     if current + len(rows) > quota:
-        raise HTTPException(413, detail=f"Workspace metric-row quota ({quota:,}) would be exceeded; current {current:,}, incoming {len(rows):,}.")
+        raise HTTPException(
+            413,
+            detail=f"Workspace metric-row quota ({quota:,}) would be exceeded; current {current:,}, incoming {len(rows):,}.",
+        )
     rows, created, touched = resolve_campaigns(db, workspace_id, rows)
     written = upsert_metrics(db, rows, aggregate=aggregate)
     days = [r["day"] for r in rows]
