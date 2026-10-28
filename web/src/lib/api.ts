@@ -1,197 +1,252 @@
 /**
- * API client. Talks to VITE_API_URL; if the API is unreachable (or the env var is
- * unset) every call transparently falls back to the bundled mock dataset so the
- * hosted demo works standalone. `source` tells the UI which mode is active.
+ * ChannelMix API client — implements api/CONTRACT.md v1. No mock fallbacks: every
+ * failure surfaces as an ApiError that the UI renders as a designed state
+ * (unreachable / key invalid / validation).
+ *
+ * Base URL: VITE_API_URL. Defaults: production -> https://channelmix-api.vercel.app,
+ * dev -> http://localhost:8000. JSON endpoints live under `${API_URL}/api/v1`;
+ * `/health` is at the root. The SSE stream is `${API_URL}/api/v1/stream?api_key=`
+ * because EventSource cannot set headers.
  */
-import { ref } from 'vue'
-import accountsMock from '../mock/accounts.json'
-import campaignsMock from '../mock/campaigns.json'
-import channelMixMock from '../mock/channel_mix.json'
-import trendMock from '../mock/trend.json'
-import trendTotalMock from '../mock/trend_total.json'
-import campaignReportMock from '../mock/campaign_report.json'
-import recommendationMock from '../mock/recommendation.json'
-import { reallocate } from './recommender'
 import type {
-  Account,
+  BulkResult,
   Campaign,
   CampaignPerformanceRow,
   Channel,
   ChannelMixReport,
+  DailyMetric,
   DateRange,
+  ImportFormat,
+  ImportRecord,
+  ImportResponse,
+  MetricRowIn,
   RecommendationRequest,
   RecommendationResponse,
+  SampleDatasetInfo,
+  StoredEvent,
+  SummaryReport,
   TrendReport,
+  Workspace,
+  WorkspaceCreated,
 } from './types'
 
-export const API_URL: string = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '') ?? ''
-export const source = ref<'api' | 'mock' | 'probing'>(API_URL ? 'probing' : 'mock')
-export const lastCache = ref<string | null>(null)
+const envUrl = (import.meta.env.VITE_API_URL as string | undefined)?.trim()
+export const API_URL: string = (envUrl && envUrl.length > 0
+  ? envUrl
+  : import.meta.env.PROD
+    ? 'https://channelmix-api.vercel.app'
+    : 'http://localhost:8000'
+).replace(/\/$/, '')
+export const API_PREFIX = '/api/v1'
+export const API_BASE = `${API_URL}${API_PREFIX}`
+export const KEY_HEADER = 'X-Api-Key'
 
-let apiAvailable: boolean | null = API_URL ? null : false
+export type ApiErrorKind = 'unreachable' | 'unauthorized' | 'not_found' | 'validation' | 'conflict' | 'server' | 'aborted'
 
-async function probe(): Promise<boolean> {
-  if (apiAvailable !== null) return apiAvailable
-  try {
-    const ctrl = new AbortController()
-    const t = setTimeout(() => ctrl.abort(), 2500)
-    const r = await fetch(`${API_URL}/health`, { signal: ctrl.signal })
-    clearTimeout(t)
-    apiAvailable = r.ok
-  } catch {
-    apiAvailable = false
+export class ApiError extends Error {
+  kind: ApiErrorKind
+  status: number
+  detail: unknown
+  constructor(kind: ApiErrorKind, status: number, message: string, detail?: unknown) {
+    super(message)
+    this.name = 'ApiError'
+    this.kind = kind
+    this.status = status
+    this.detail = detail
   }
-  source.value = apiAvailable ? 'api' : 'mock'
-  return apiAvailable
-}
-
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const r = await fetch(`${API_URL}/api/v1${path}`, {
-    ...init,
-    headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
-  })
-  if (!r.ok) throw new Error(`${r.status} ${r.statusText}: ${await r.text()}`)
-  lastCache.value = r.headers.get('X-Cache')
-  return (await r.json()) as T
-}
-
-async function withFallback<T>(live: () => Promise<T>, mock: () => T): Promise<T> {
-  if (!(await probe())) return mock()
-  try {
-    return await live()
-  } catch (e) {
-    console.warn('[channelmix] API call failed, using mock data', e)
-    apiAvailable = false
-    source.value = 'mock'
-    return mock()
+  /** true when the workspace key is missing/invalid (401) */
+  get isAuth() {
+    return this.kind === 'unauthorized'
   }
 }
 
-const qs = (params: Record<string, string | number | undefined | null>) => {
+export function describeError(e: unknown): string {
+  if (e instanceof ApiError) return e.message
+  if (e instanceof Error) return e.message
+  return String(e)
+}
+
+function kindFor(status: number): ApiErrorKind {
+  if (status === 401 || status === 403) return 'unauthorized'
+  if (status === 404) return 'not_found'
+  if (status === 409) return 'conflict'
+  if (status === 400 || status === 413 || status === 415 || status === 422) return 'validation'
+  return 'server'
+}
+
+function humanize(status: number, detail: unknown): string {
+  const d =
+    detail && typeof detail === 'object' && 'detail' in (detail as Record<string, unknown>)
+      ? (detail as { detail: unknown }).detail
+      : detail
+  if (typeof d === 'string' && d.trim().length > 0 && d.length < 400) return d
+  if (Array.isArray(d) && d[0] && typeof d[0] === 'object' && 'msg' in d[0]) {
+    return d
+      .map((x: { loc?: unknown[]; msg: string }) => {
+        const field = (x.loc ?? []).filter((p) => p !== 'body').slice(-1)[0]
+        return `${field ? `${field}: ` : ''}${x.msg}`
+      })
+      .join('; ')
+  }
+  switch (status) {
+    case 401:
+    case 403:
+      return 'This workspace key is not valid.'
+    case 404:
+      return 'Not found.'
+    case 405:
+      return 'This action is not available on the connected API.'
+    case 413:
+      return 'File too large.'
+    case 429:
+      return 'Too many requests — slow down a little.'
+    default:
+      return status >= 500 ? 'The API hit an internal error.' : `Request failed (${status}).`
+  }
+}
+
+export const qs = (params: Record<string, string | number | boolean | undefined | null>) => {
   const u = new URLSearchParams()
   for (const [k, v] of Object.entries(params)) if (v !== undefined && v !== null && v !== '') u.set(k, String(v))
   const s = u.toString()
   return s ? `?${s}` : ''
 }
 
-const inRange = (day: string, range: DateRange) => day >= range.start && day <= range.end
-
-// ---- mock helpers: make the date filter meaningful offline ---------------------
-function mockChannelMix(range: DateRange): ChannelMixReport {
-  const base = channelMixMock as ChannelMixReport
-  const pts = (trendMock as TrendReport).points.filter((p) => inRange(p.day, range))
-  const agg: Record<string, { spend: number; revenue: number; conversions: number }> = {}
-  for (const p of pts) {
-    agg[p.channel] ??= { spend: 0, revenue: 0, conversions: 0 }
-    agg[p.channel].spend += p.spend
-    agg[p.channel].revenue += p.revenue
-    agg[p.channel].conversions += p.conversions
-  }
-  const totalSpend = Object.values(agg).reduce((a, b) => a + b.spend, 0)
-  const totalRevenue = Object.values(agg).reduce((a, b) => a + b.revenue, 0)
-  const channels = base.channels
-    .filter((c) => agg[c.channel])
-    .map((c) => {
-      const a = agg[c.channel]
-      const ratio = c.spend ? a.spend / c.spend : 0
-      const impressions = Math.round(c.impressions * ratio)
-      const clicks = Math.round(c.clicks * ratio)
-      return {
-        ...c,
-        spend: a.spend,
-        revenue: a.revenue,
-        conversions: a.conversions,
-        impressions,
-        clicks,
-        spend_share: totalSpend ? a.spend / totalSpend : 0,
-        revenue_share: totalRevenue ? a.revenue / totalRevenue : 0,
-        roas: a.spend ? a.revenue / a.spend : null,
-        cpa: a.conversions ? a.spend / a.conversions : null,
-        ctr: impressions ? clicks / impressions : null,
-        cpc: clicks ? a.spend / clicks : null,
-      }
-    })
-    .sort((x, y) => y.spend - x.spend)
-  const ranked = [...channels].sort((x, y) => (y.roas ?? 0) - (x.roas ?? 0))
-  for (const c of channels) c.roas_rank = ranked.indexOf(c) + 1
-  return {
-    ...base,
-    start: range.start,
-    end: range.end,
-    total_spend: totalSpend,
-    total_revenue: totalRevenue,
-    blended_roas: totalSpend ? totalRevenue / totalSpend : null,
-    channels,
-  }
+export interface RequestOptions extends Omit<RequestInit, 'body'> {
+  key?: string | null
+  body?: unknown
+  timeoutMs?: number
+  raw?: boolean
 }
 
-function mockTrend(range: DateRange, groupBy: 'channel' | 'total'): TrendReport {
-  const base = (groupBy === 'total' ? trendTotalMock : trendMock) as TrendReport
-  return { ...base, start: range.start, end: range.end, points: base.points.filter((p) => inRange(p.day, range)) }
+let onUnauthorized: ((e: ApiError) => void) | null = null
+/** The workspace store registers a handler so any 401 flips the UI into the 'key invalid' state. */
+export function setUnauthorizedHandler(fn: ((e: ApiError) => void) | null) {
+  onUnauthorized = fn
 }
 
-function mockCampaigns(range: DateRange, channel?: Channel | null): CampaignPerformanceRow[] {
-  // scale the 90-day campaign totals by the share of in-range days so the drill-down reacts to the filter
-  const all = (trendMock as TrendReport).points
-  const byChannel: Record<string, number> = {}
-  for (const ch of ['google', 'meta', 'amazon']) {
-    const total = all.filter((p) => p.channel === ch).reduce((a, p) => a + p.spend, 0)
-    const sel = all.filter((p) => p.channel === ch && inRange(p.day, range)).reduce((a, p) => a + p.spend, 0)
-    byChannel[ch] = total ? sel / total : 0
+export async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
+  const { key, body, timeoutMs = 20_000, raw, headers, ...init } = opts
+  const ctrl = new AbortController()
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs)
+  const h = new Headers(headers ?? {})
+  if (key) h.set(KEY_HEADER, key)
+  let payload: BodyInit | undefined
+  if (body instanceof FormData) payload = body
+  else if (body !== undefined) {
+    h.set('Content-Type', 'application/json')
+    payload = JSON.stringify(body)
   }
-  return (campaignReportMock as CampaignPerformanceRow[])
-    .filter((r) => !channel || r.channel === channel)
-    .map((r) => {
-      const k = byChannel[r.channel] ?? 1
-      return {
-        ...r,
-        spend: r.spend * k,
-        revenue: r.revenue * k,
-        impressions: Math.round(r.impressions * k),
-        clicks: Math.round(r.clicks * k),
-        conversions: Math.round(r.conversions * k),
-      }
-    })
-    .filter((r) => r.spend > 0)
+  const url = path.startsWith('http') ? path : `${API_BASE}${path}`
+  const outer = init.signal
+  outer?.addEventListener('abort', () => ctrl.abort(), { once: true })
+  let r: Response
+  try {
+    r = await fetch(url, { ...init, headers: h, body: payload, signal: ctrl.signal })
+  } catch (e) {
+    clearTimeout(timer)
+    if (outer?.aborted) throw new ApiError('aborted', 0, 'Request cancelled')
+    if ((e as Error).name === 'AbortError') throw new ApiError('unreachable', 0, `The API at ${API_URL} did not answer in time.`, e)
+    throw new ApiError('unreachable', 0, `Cannot reach the API at ${API_URL}.`, e)
+  }
+  clearTimeout(timer)
+  if (!r.ok) {
+    let detail: unknown = null
+    const text = await r.text().catch(() => '')
+    try {
+      detail = text ? JSON.parse(text) : null
+    } catch {
+      detail = text
+    }
+    const err = new ApiError(kindFor(r.status), r.status, humanize(r.status, detail), detail)
+    if (err.kind === 'unauthorized' && onUnauthorized) onUnauthorized(err)
+    throw err
+  }
+  if (raw) return r as unknown as T
+  if (r.status === 204) return undefined as T
+  const ct = r.headers.get('content-type') ?? ''
+  if (!ct.includes('json')) return (await r.text()) as unknown as T
+  return (await r.json()) as T
 }
 
-// ---- public API ------------------------------------------------------------------
+/* ---------- endpoints (api/CONTRACT.md) ---------- */
+
 export const api = {
-  probe,
-  accounts: () => withFallback(() => request<Account[]>('/accounts'), () => accountsMock as Account[]),
+  health: (signal?: AbortSignal) =>
+    request<{ status: string; version?: string; cache?: string; database?: string }>(`${API_URL}/health`, { timeoutMs: 8000, signal }),
 
-  campaigns: (accountId: number) =>
-    withFallback(() => request<Campaign[]>(`/accounts/${accountId}/campaigns`), () => campaignsMock as Campaign[]),
+  // workspaces
+  createWorkspace: (body: { name: string; email: string }) => request<WorkspaceCreated>('/workspaces', { method: 'POST', body }),
+  me: (key: string, signal?: AbortSignal) => request<Workspace>('/workspaces/me', { key, signal }),
+  /** Not in CONTRACT v1 — the UI degrades to a clear "not available" message if the API answers 404/405. */
+  rotateKey: (key: string) => request<{ api_key: string }>('/workspaces/me/rotate-key', { key, method: 'POST' }),
+  deleteWorkspace: (key: string) => request<void>('/workspaces/me', { key, method: 'DELETE' }),
 
-  channelMix: (accountId: number, range: DateRange) =>
-    withFallback(
-      () => request<ChannelMixReport>(`/accounts/${accountId}/reports/channel-mix${qs({ ...range })}`),
-      () => mockChannelMix(range),
-    ),
+  // campaigns
+  campaigns: (key: string, params: { channel?: Channel | null; status?: string | null } = {}, signal?: AbortSignal) =>
+    request<Campaign[]>(`/campaigns${qs({ channel: params.channel ?? null, status: params.status ?? null })}`, { key, signal }),
+  campaign: (key: string, id: number | string, signal?: AbortSignal) => request<Campaign>(`/campaigns/${id}`, { key, signal }),
+  updateCampaign: (key: string, id: number | string, body: Partial<Pick<Campaign, 'name' | 'status' | 'daily_budget'>>) =>
+    request<Campaign>(`/campaigns/${id}`, { key, method: 'PATCH', body }),
+  deleteCampaign: (key: string, id: number | string) => request<void>(`/campaigns/${id}`, { key, method: 'DELETE' }),
 
-  trend: (accountId: number, range: DateRange, groupBy: 'channel' | 'total' = 'channel') =>
-    withFallback(
-      () => request<TrendReport>(`/accounts/${accountId}/reports/trend${qs({ ...range, group_by: groupBy })}`),
-      () => mockTrend(range, groupBy),
-    ),
+  // metrics
+  metrics: (key: string, params: { campaign_id?: number | string; start?: string; end?: string; limit?: number }, signal?: AbortSignal) =>
+    request<DailyMetric[]>(`/metrics${qs({ ...params })}`, { key, signal }),
+  bulkMetrics: (key: string, rows: MetricRowIn[], idempotencyKey?: string) =>
+    request<BulkResult>('/metrics/bulk', { key, method: 'POST', body: { rows }, headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined }),
 
-  campaignReport: (accountId: number, range: DateRange, channel?: Channel | null) =>
-    withFallback(
-      () => request<CampaignPerformanceRow[]>(`/accounts/${accountId}/reports/campaigns${qs({ ...range, channel })}`),
-      () => mockCampaigns(range, channel),
-    ),
+  // reports
+  summary: (key: string, range: DateRange, signal?: AbortSignal) => request<SummaryReport>(`/reports/summary${qs({ ...range })}`, { key, signal }),
+  byChannel: (key: string, range: DateRange, signal?: AbortSignal) => request<ChannelMixReport>(`/reports/by-channel${qs({ ...range })}`, { key, signal }),
+  trend: (key: string, range: DateRange, groupBy: 'channel' | 'total' = 'channel', signal?: AbortSignal) =>
+    request<TrendReport>(`/reports/trend${qs({ ...range, group_by: groupBy })}`, { key, signal }),
+  campaignReport: (key: string, range: DateRange, channel?: Channel | null, signal?: AbortSignal) =>
+    request<CampaignPerformanceRow[]>(`/reports/campaigns${qs({ ...range, channel: channel ?? null })}`, { key, signal }),
+  recommend: (key: string, params: RecommendationRequest & { end?: string }, signal?: AbortSignal) =>
+    request<RecommendationResponse>(`/recommendations${qs({ ...params })}`, { key, signal }),
 
-  recommend: (accountId: number, body: RecommendationRequest) =>
-    withFallback(
-      () =>
-        request<RecommendationResponse>(`/accounts/${accountId}/recommendations/budget`, {
-          method: 'POST',
-          body: JSON.stringify(body),
-        }),
-      () => {
-        const base = recommendationMock as RecommendationResponse
-        const budget = body.total_budget ?? base.channels.reduce((a, c) => a + c.current_daily_spend, 0)
-        return reallocate(base, budget, body.min_share ?? 0.05, body.max_shift_pct ?? null)
-      },
-    ),
+  // CSV import (dry-run first, then commit)
+  importCsv: (key: string, file: File, opts: { dryRun: boolean; format?: ImportFormat | null; channel?: Channel | null }, signal?: AbortSignal) => {
+    const fd = new FormData()
+    fd.append('file', file, file.name)
+    fd.append('dry_run', opts.dryRun ? 'true' : 'false')
+    if (opts.format) fd.append('format', opts.format)
+    if (opts.channel) fd.append('channel', opts.channel)
+    return request<ImportResponse>('/imports/csv', { key, method: 'POST', body: fd, timeoutMs: 120_000, signal })
+  },
+  imports: (key: string, limit = 20, signal?: AbortSignal) => request<ImportRecord[]>(`/imports${qs({ limit })}`, { key, signal }),
+
+  // sample dataset (real public data; never auto-imported)
+  sampleInfo: (signal?: AbortSignal) => request<SampleDatasetInfo>('/datasets/sample/info', { signal }),
+  importSample: (key: string) => request<ImportResponse>('/datasets/sample/import', { key, method: 'POST', timeoutMs: 120_000 }),
+
+  // live
+  streamUrl: (key: string, lastEventId?: string | null) => `${API_BASE}/stream${qs({ api_key: key, last_event_id: lastEventId ?? null })}`,
+  events: (key: string, after: string | number | null, limit = 100, signal?: AbortSignal) =>
+    request<StoredEvent[]>(`/events${qs({ after, limit })}`, { key, signal }),
+}
+
+/** Copy-paste ingest snippet shown in the Import page; uses the visitor's real key. */
+export function curlSnippet(key: string): string {
+  const day = new Date().toISOString().slice(0, 10)
+  return [
+    `curl -s -X POST ${API_BASE}/metrics/bulk \\`,
+    `  -H "${KEY_HEADER}: ${key}" \\`,
+    `  -H "Content-Type: application/json" \\`,
+    `  -H "Idempotency-Key: $(uuidgen)" \\`,
+    `  -d '{"rows": [`,
+    `    {"channel": "google", "external_id": "brand-search", "campaign_name": "Brand search",`,
+    `     "day": "${day}", "impressions": 12000, "clicks": 480, "conversions": 22,`,
+    `     "spend": 310.5, "revenue": 1420}`,
+    `  ]}'`,
+  ].join('\n')
+}
+
+export function curlPreviewSnippet(key: string): string {
+  return [`curl -s -X POST ${API_BASE}/imports/csv \\`, `  -H "${KEY_HEADER}: ${key}" \\`, `  -F file=@export.csv -F dry_run=true`].join('\n')
+}
+
+export function curlStreamSnippet(key: string): string {
+  return `curl -N "${API_BASE}/stream?api_key=${key}"`
 }

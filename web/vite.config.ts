@@ -12,9 +12,14 @@ export default defineConfig({
     alias: { 'vue-echarts': new URL('./src/__tests__/vchart-stub.ts', import.meta.url).pathname },
   },
   build: {
+    target: 'es2020',
+    chunkSizeWarningLimit: 600,
     rollupOptions: {
       output: {
-        manualChunks: { echarts: ['echarts', 'vue-echarts'] },
+        manualChunks(id) {
+          if (id.includes('node_modules/echarts') || id.includes('node_modules/zrender') || id.includes('vue-echarts')) return 'echarts'
+          if (id.includes('node_modules/vue') || id.includes('node_modules/@vue') || id.includes('node_modules/pinia')) return 'vue'
+        },
       },
     },
   },
