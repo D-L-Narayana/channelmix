@@ -31,12 +31,21 @@ Machine: sandbox container, Python 3.14, SQLAlchemy 2.1, single process. Numbers
 | idempotent replay 10k | ~100 ms | body hash + key lookup only |
 | rows in table after all phases | 50,000 | no duplicates |
 
-### PostgreSQL 16 (CI service container)
+### PostgreSQL 16 (GitHub Actions service container, run 40654493350)
 
-The CI workflow (`.github/workflows/ci.yml`) runs the same script against the Postgres service after the test job;
-see the "bench" step output in the Actions log for current numbers. On a local Docker Postgres (`docker compose up postgres`)
-the cold insert of 50k rows typically lands in the 1–2 s range (25–50k rows/s) — Postgres pays per-statement network
-round trips that SQLite doesn't, which the 2,000-row chunking is tuned for.
+Same script, `DATABASE_URL=postgresql+psycopg://postgres:ci@localhost:5432/channelmix`, Python 3.11, 2-vCPU runner.
+
+| phase | time | throughput |
+|---|---|---|
+| cold insert 50k | 3.38 s | ~14,800 rows/s |
+| warm upsert 50k | 3.07 s | ~16,300 rows/s |
+| http 10k (end-to-end) | 0.84 s | ~11,900 rows/s |
+| idempotent replay 10k | ~150 ms | body hash + key lookup only |
+| rows in table after all phases | 50,000 | no duplicates |
+
+Postgres is slower than file-SQLite here because every 2,000-row chunk is a network round trip on a shared CI runner
+and `ON CONFLICT DO UPDATE` has to maintain the unique index + MVCC versions; the bench step in CI re-measures this on
+every push so the number tracks the code.
 
 ## What made it fast
 
