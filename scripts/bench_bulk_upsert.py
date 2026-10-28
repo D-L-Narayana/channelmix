@@ -31,29 +31,30 @@ def main() -> None:
     from sqlalchemy.orm import sessionmaker
 
     from app.config import get_settings
-    from app.db import Base, make_engine
-    from app.models import Account, Campaign, Channel
-    from app.routers.metrics import upsert_metrics
+    from app.auth import generate_api_key, hash_api_key
+    from app.db import Base, init_db, make_engine
+    from app.ingest import upsert_metrics
+    from app.models import Campaign, Channel, Workspace
 
     url = get_settings().database_url
     engine = make_engine(url)
     Base.metadata.drop_all(engine)
-    Base.metadata.create_all(engine)
+    init_db(engine)
     Session = sessionmaker(bind=engine, expire_on_commit=False)
     rng = random.Random(1)
 
     with Session() as db:
-        acc = Account(name="bench")
+        api_key = generate_api_key()
+        acc = Workspace(slug="bench", name="bench", email="bench@example.com", api_key_hash=hash_api_key(api_key))
         db.add(acc)
         db.flush()
         camps = [
-            Campaign(account_id=acc.id, channel=list(Channel)[i % 3], external_id=f"c{i}", name=f"c{i}")
+            Campaign(workspace_id=acc.id, channel=list(Channel)[i % 3], external_id=f"c{i}", name=f"c{i}")
             for i in range(CAMPAIGNS)
         ]
         db.add_all(camps)
         db.commit()
         camp_ids = [c.id for c in camps]
-        account_id = acc.id
 
     end = date(2024, 12, 31)
     rows = []
@@ -106,13 +107,12 @@ def main() -> None:
     payload = {"rows": [{**r, "day": r["day"].isoformat()} for r in rows[:10_000]]}
     with TestClient(app) as client:
         t0 = time.perf_counter()
-        resp = client.post(
-            f"/api/v1/accounts/{account_id}/metrics/bulk", json=payload, headers={"Idempotency-Key": "bench-1"}
-        )
+        hdr = {"Idempotency-Key": "bench-1", "X-Api-Key": api_key}
+        resp = client.post("/api/v1/metrics/bulk", json=payload, headers=hdr)
         http = time.perf_counter() - t0
         assert resp.status_code == 200, resp.text
         t0 = time.perf_counter()
-        client.post(f"/api/v1/accounts/{account_id}/metrics/bulk", json=payload, headers={"Idempotency-Key": "bench-1"})
+        client.post("/api/v1/metrics/bulk", json=payload, headers=hdr)
         replay = time.perf_counter() - t0
     print(f"http 10k    : {http:6.2f}s  ({10_000 / http:,.0f} rows/s incl. validation)")
     print(f"idem replay : {replay * 1000:6.1f}ms (same key, no write)")
