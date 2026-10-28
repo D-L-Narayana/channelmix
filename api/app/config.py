@@ -25,6 +25,11 @@ class Settings(BaseSettings):
     sse_heartbeat_seconds: float = 15.0
     sse_poll_seconds: float = 1.0
     public_web_url: str = "https://channelmix.vercel.app"
+    # Abuse limits (self-serve signup is public)
+    signup_per_ip_per_hour: int = 5
+    signup_global_per_hour: int = 60
+    max_workspaces: int = 2000
+    max_metric_rows_per_workspace: int = 500_000
 
 
 @lru_cache

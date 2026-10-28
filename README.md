@@ -202,3 +202,7 @@ api/tests/      pytest suite, fixtures/ (real Google/Meta export samples), featu
 web/            Vue 3 + Vite + TS — src/pages (Landing, Dashboard, Import, Campaign, Settings), components, stores, lib/api.ts, __tests__
 elk/            logstash.conf          scripts/  bench_bulk_upsert.py          docs/  benchmarks.md
 ```
+
+## Abuse limits
+
+Self-serve signup is public, so it is throttled: **5 workspaces / IP / hour**, **60 / hour globally**, hard cap of 2,000 workspaces, and a **500k metric-row quota per workspace** (`413` when exceeded). All limits are environment-configurable (`SIGNUP_PER_IP_PER_HOUR`, `SIGNUP_GLOBAL_PER_HOUR`, `MAX_WORKSPACES`, `MAX_METRIC_ROWS_PER_WORKSPACE`). Uploads are capped at 25 MB; bulk JSON at 100k rows per request. API keys are stored only as SHA-256 hashes and compared in constant time.

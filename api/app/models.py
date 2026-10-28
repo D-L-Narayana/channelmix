@@ -49,6 +49,16 @@ class Workspace(Base):
     campaigns: Mapped[list["Campaign"]] = relationship(back_populates="workspace", cascade="all, delete-orphan")
 
 
+class SignupEvent(Base):
+    """One row per workspace signup, keyed by a salted hash of the caller IP. Used only for throttling."""
+
+    __tablename__ = "signup_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    ip_hash: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False, index=True)
+
+
 class Campaign(Base):
     """Unified campaign model: the same shape regardless of channel."""
 
