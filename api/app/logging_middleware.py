@@ -1,30 +1,31 @@
 """Structured JSON request logging.
 
-Every request emits one JSON line (stdout) with request_id, method, path,
-status, account_id (parsed from the route) and latency_ms. Logstash picks
-these lines up (see elk/logstash.conf) and ships them to Elasticsearch.
+Every request emits one JSON line (stdout) with request_id, method, path, status, workspace_id (resolved
+from the API key by the auth dependency) and latency_ms. Vercel / Logstash pick these lines up as-is.
 """
 
 from __future__ import annotations
 
 import logging
-import re
 import sys
 import time
 import uuid
 
-from pythonjsonlogger import jsonlogger
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 
-ACCOUNT_RE = re.compile(r"/accounts/(\d+)")
+try:  # python-json-logger >= 3
+    from pythonjsonlogger.json import JsonFormatter
+except ImportError:  # pragma: no cover - older versions
+    from pythonjsonlogger.jsonlogger import JsonFormatter  # type: ignore[no-redef]
+
 REQUEST_LOGGER = "channelmix.request"
 
 
 def configure_logging(level: str = "INFO") -> None:
     handler = logging.StreamHandler(sys.stdout)
     handler.setFormatter(
-        jsonlogger.JsonFormatter(
+        JsonFormatter(
             "%(asctime)s %(levelname)s %(name)s %(message)s",
             rename_fields={"asctime": "@timestamp", "levelname": "level", "name": "logger"},
         )
@@ -51,10 +52,6 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
             return response
         finally:
             latency_ms = round((time.perf_counter() - start) * 1000, 2)
-            m = ACCOUNT_RE.search(request.url.path)
-            account_id = int(m.group(1)) if m else None
-            if account_id is None and request.query_params.get("account_id", "").isdigit():
-                account_id = int(request.query_params["account_id"])
             self.log.info(
                 "request",
                 extra={
@@ -62,7 +59,7 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
                     "method": request.method,
                     "path": request.url.path,
                     "status": status,
-                    "account_id": account_id,
+                    "workspace_id": getattr(request.state, "workspace_id", None),
                     "latency_ms": latency_ms,
                     "client": request.client.host if request.client else None,
                     "service": "channelmix-api",

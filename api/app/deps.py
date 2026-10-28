@@ -7,7 +7,8 @@ _cache: Cache | None = None
 def get_cache() -> Cache:
     global _cache
     if _cache is None:
-        _cache = build_cache(get_settings().redis_url)
+        s = get_settings()
+        _cache = build_cache(s.redis_url, s.cache_max_entries)
     return _cache
 
 
