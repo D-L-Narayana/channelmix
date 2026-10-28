@@ -5,6 +5,7 @@ SQLite has no schemas, so the SQLite engine carries a ``schema_translate_map`` t
 at compile time; the same models/queries run unchanged in tests and local dev.
 """
 
+import os
 from collections.abc import Generator
 
 from sqlalchemy import MetaData, create_engine, event
@@ -14,7 +15,8 @@ from sqlalchemy.pool import NullPool, StaticPool
 
 from app.config import get_settings
 
-SCHEMA = "channelmix"
+# One PostgreSQL schema per app in the shared database. Override only for throwaway test schemas.
+SCHEMA = os.environ.get("DB_SCHEMA", "channelmix")
 
 NAMING = {
     "ix": "ix_%(column_0_label)s",

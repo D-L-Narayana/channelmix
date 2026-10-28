@@ -1,7 +1,7 @@
 """Vercel Python serverless entrypoint. Exposes the FastAPI ASGI app as ``app``.
 
-The Vercel project root is the repository root; this file lives in ``api/`` so ``app`` (the package next to
-it) must be importable regardless of the working directory the runtime uses.
+The Vercel project ``channelmix-api`` has root directory ``api/``; ``app`` (the package next to this file) is
+put on ``sys.path`` so it imports regardless of the working directory the runtime uses.
 """
 
 import os

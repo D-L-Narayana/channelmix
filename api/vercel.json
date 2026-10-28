@@ -2,28 +2,23 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
   "functions": {
-    "api/index.py": {
+    "index.py": {
       "maxDuration": 30
     }
   },
   "rewrites": [
     {
       "source": "/(.*)",
-      "destination": "/api/index"
+      "destination": "/index"
     }
   ],
   "headers": [
     {
       "source": "/api/v1/stream",
       "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "no-cache, no-transform"
-        }
+        { "key": "Cache-Control", "value": "no-cache, no-transform" }
       ]
     }
   ],
-  "regions": [
-    "bom1"
-  ]
+  "regions": ["bom1"]
 }

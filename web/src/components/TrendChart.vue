@@ -72,10 +72,21 @@ const option = computed(() => {
   }
 })
 
+/** Average of the first 7 days vs the last 7 days in range (all channels). */
+const weekShift = computed(() => {
+  if (metric.value === 'roas' || days.value.length < 14) return null
+  const byDay = new Map<string, number>()
+  for (const p of props.report?.points ?? []) byDay.set(p.day, (byDay.get(p.day) ?? 0) + ((p[metric.value] as number) ?? 0))
+  const first = days.value.slice(0, 7).reduce((a, d) => a + (byDay.get(d) ?? 0), 0) / 7
+  const last = days.value.slice(-7).reduce((a, d) => a + (byDay.get(d) ?? 0), 0) / 7
+  return first > 0 ? last / first - 1 : null
+})
 const title = computed(() => {
   const m = METRICS.find((x) => x.key === metric.value)!.label
   if (metric.value === 'spend' && props.deltaSpend !== null && props.deltaSpend !== undefined)
     return `Spend ${props.deltaSpend >= 0 ? 'up' : 'down'} ${pct(Math.abs(props.deltaSpend), 1)} vs the previous period`
+  const w = weekShift.value
+  if (w !== null && Math.abs(w) >= 0.02) return `${m} ${w >= 0 ? 'up' : 'down'} ${pct(Math.abs(w), 0)} from the first to the last week`
   return `${m} by channel, daily`
 })
 const aria = computed(() => {
@@ -85,7 +96,7 @@ const aria = computed(() => {
 </script>
 
 <template>
-  <ChartFrame :title="title" :subtitle="empty ? undefined : `${days.length} days · ${channels.length} channels`" :loading="loading" :empty="empty" :desc="aria" :height="300">
+  <ChartFrame :title="title" :subtitle="empty ? undefined : `${days.length} days · ${channels.length} channel${channels.length === 1 ? '' : 's'}`" :loading="loading" :empty="empty" :desc="aria" :height="300">
     <template #actions>
       <div class="seg" role="group" aria-label="Metric">
         <button v-for="m in METRICS" :key="m.key" type="button" :class="{ on: metric === m.key }" :aria-pressed="metric === m.key" @click="metric = m.key">{{ m.label }}</button>

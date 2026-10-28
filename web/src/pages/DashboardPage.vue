@@ -45,7 +45,7 @@ const zeroSummary: SummaryReport = {
 }
 
 const recReq = ref<RecommendationRequest>({ lookback_days: 30, min_share: 0.05, max_shift_pct: null, total_budget: null })
-const rec = useQuery((s) => api.recommend(key.value, { ...recReq.value }, s), { deps: [recReq], refetchOn: ['metrics.upserted', 'import.completed'] })
+const rec = useQuery((s) => api.recommend(key.value, { ...recReq.value, end: range.value.end }, s), { deps: [recReq, () => range.value.end], refetchOn: ['metrics.upserted', 'import.completed'] })
 function runRec(req: RecommendationRequest) {
   recReq.value = req
 }

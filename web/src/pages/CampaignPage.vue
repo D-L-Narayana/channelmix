@@ -195,7 +195,7 @@ const columns: Column[] = [
           </ChartFrame>
         </div>
 
-        <Card title="Daily rows" :subtitle="`${rows.length} days with data in range`" flush>
+        <Card title="Daily rows" :subtitle="`${rows.length} days with data in range`" flush class="rowscard">
           <Table :columns="columns" :rows="sorted" :row-key="(r) => r.day" v-model:sort="sort" :loading="metrics.loading.value" dense caption="Daily metrics for this campaign">
             <template #cell-impressions="{ value }">{{ num(value) }}</template>
             <template #cell-clicks="{ value }">{{ num(value) }}</template>
@@ -228,6 +228,7 @@ const columns: Column[] = [
 .s { font-size: var(--fs-12); }
 .charts { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 .chart { width: 100%; height: 100%; }
+.rowscard :deep(.wrap) { max-height: 520px; overflow: auto; }
 .dt { width: 100%; border-collapse: collapse; font-size: var(--fs-13); }
 .dt td { padding: 6px 10px; border-bottom: 1px solid var(--border); }
 .dt .num { text-align: right; font-variant-numeric: tabular-nums; }

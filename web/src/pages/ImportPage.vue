@@ -237,8 +237,8 @@ const snippetStream = computed(() => curlStreamSnippet(shownKey.value))
 .desc { font-size: var(--fs-13); line-height: 1.5; }
 .meta { font-size: var(--fs-13); }
 .attribution { font-size: var(--fs-12); }
-.lnk { color: var(--accent); }
-.lnk:hover { text-decoration: underline; }
+.lnk { color: var(--text); text-decoration: underline; text-decoration-color: var(--border-strong); text-underline-offset: 2px; }
+.lnk:hover { color: var(--text-strong); text-decoration-color: var(--text-strong); }
 .code { background: var(--bg); border: 1px solid var(--border); border-radius: var(--r-md); padding: 12px 14px; font-size: var(--fs-13); line-height: 1.55; overflow-x: auto; color: var(--text); }
 .code:focus-visible { box-shadow: var(--ring); }
 .endpoints { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }

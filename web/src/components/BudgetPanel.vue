@@ -21,7 +21,7 @@ const shift = ref(props.request.max_shift_pct === null || props.request.max_shif
 watch(
   () => props.result,
   (r) => {
-    if (r && !budget.value) budget.value = String(Math.round(r.total_budget))
+    if (r && !budget.value && r.total_budget > 0) budget.value = String(Math.round(r.total_budget))
   },
 )
 
@@ -89,6 +89,7 @@ const title = computed(() => {
 
 <style scoped>
 .controls { display: grid; grid-template-columns: 160px 140px 170px auto; gap: 12px; align-items: end; margin-bottom: 18px; }
+.controls > :last-child { justify-self: start; }
 .controls :deep(.field) { display: flex; }
 .summary { font-size: var(--fs-14); color: var(--text); line-height: 1.55; max-width: 72ch; margin-bottom: 14px; }
 .recs { display: flex; flex-direction: column; gap: 14px; }

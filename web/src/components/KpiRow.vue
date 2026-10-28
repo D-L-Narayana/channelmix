@@ -18,6 +18,8 @@ interface Kpi {
   full: string
   delta: number | null
   betterWhenLower?: boolean
+  /** volume metrics: direction is shown but not judged */
+  neutral?: boolean
 }
 
 const windowLabel = computed(() => {
@@ -32,18 +34,19 @@ const kpis = computed<Kpi[]>(() => {
   const dp = r.delta_pct ?? {}
   const c = props.currency
   return [
-    { key: 'spend', label: 'Spend', value: compact(r.spend, c), full: money(r.spend, c, 2), delta: dp.spend ?? null },
-    { key: 'impressions', label: 'Impressions', value: compact(r.impressions), full: num(r.impressions), delta: dp.impressions ?? null },
-    { key: 'clicks', label: 'Clicks', value: compact(r.clicks), full: num(r.clicks), delta: dp.clicks ?? null },
+    { key: 'spend', label: 'Spend', value: compact(r.spend, c), full: money(r.spend, c, 2), delta: dp.spend ?? null, neutral: true },
+    { key: 'impressions', label: 'Impressions', value: compact(r.impressions), full: num(r.impressions), delta: dp.impressions ?? null, neutral: true },
+    { key: 'clicks', label: 'Clicks', value: compact(r.clicks), full: num(r.clicks), delta: dp.clicks ?? null, neutral: true },
     { key: 'conversions', label: 'Conversions', value: compact(r.conversions), full: num(r.conversions), delta: dp.conversions ?? null },
     { key: 'cpa', label: 'CPA', value: r.cpa === null ? 'â€“' : money(r.cpa, c, r.cpa < 1000 ? 2 : 0), full: money(r.cpa, c, 2), delta: dp.cpa ?? null, betterWhenLower: true },
     { key: 'roas', label: 'ROAS', value: fmtRoas(r.roas), full: `${fmtRoas(r.roas)} (${money(r.revenue, c, 0)} revenue)`, delta: dp.roas ?? null },
   ]
 })
 
-function tone(k: Kpi): 'up' | 'down' | 'flat' | 'none' {
+function tone(k: Kpi): 'up' | 'down' | 'flat' | 'none' | 'neutral' {
   if (k.delta === null || k.delta === undefined) return 'none'
   if (Math.abs(k.delta) < 0.0005) return 'flat'
+  if (k.neutral) return 'neutral'
   const good = k.betterWhenLower ? k.delta < 0 : k.delta > 0
   return good ? 'up' : 'down'
 }
@@ -67,7 +70,7 @@ const arrow = (d: number | null) => (d === null ? '' : Math.abs(d) < 0.0005 ? 'â
           <span class="arrow" aria-hidden="true">{{ arrow(k.delta) }}</span>
           <span>{{ pct(k.delta, 1, true) }}</span>
           <span class="muted win"> {{ windowLabel }}</span>
-          <span class="sr-only">{{ tone(k) === 'up' ? 'improved' : tone(k) === 'down' ? 'worsened' : 'unchanged' }}</span>
+          <span class="sr-only">{{ tone(k) === 'up' ? 'improved' : tone(k) === 'down' ? 'worsened' : tone(k) === 'neutral' ? (k.delta > 0 ? 'higher' : 'lower') : 'unchanged' }}</span>
         </template>
         <span v-else class="muted">no prior data</span>
       </div>
@@ -84,7 +87,7 @@ const arrow = (d: number | null) => (d === null ? '' : Math.abs(d) < 0.0005 ? 'â
 .delta .arrow { font-weight: 600; }
 .delta.up { color: var(--success); }
 .delta.down { color: var(--error); }
-.delta.flat { color: var(--muted); }
+.delta.flat, .delta.neutral { color: var(--text); }
 .win { font-size: var(--fs-12); }
 @media (max-width: 1200px) { .kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 640px) { .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; } .tile { padding: 12px 14px; min-height: 92px; } .value { font-size: var(--fs-24); } }

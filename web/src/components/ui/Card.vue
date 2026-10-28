@@ -39,9 +39,12 @@ withDefaults(defineProps<{ title?: string; subtitle?: string; padded?: boolean; 
 .titles { min-width: 0; }
 .title { font-size: var(--fs-16); font-weight: 500; color: var(--text-strong); }
 .sub { margin-top: 3px; font-size: var(--fs-13); color: var(--muted); }
-.actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; flex-wrap: wrap; justify-content: flex-end; }
 .body { flex: 1; min-width: 0; }
 @media (max-width: 640px) {
+  .head { flex-wrap: wrap; }
+  .titles { flex: 1 1 100%; }
+  .actions { justify-content: flex-start; }
   .padded .head { padding: 14px 14px 0; }
   .padded .body { padding: 12px 14px 14px; }
   .flush .head { padding: 14px 14px 10px; }

@@ -218,8 +218,10 @@ h1 { font-size: clamp(1.75rem, 3.2vw, 2.75rem); font-weight: 500; letter-spacing
   .landing { padding: 0 16px 32px; }
   .hero { padding-top: 24px; }
   .lead { font-size: var(--fs-16); }
-  .fake-top { grid-template-columns: 1fr auto; padding: 0 14px; }
-  .fake-top .nav { display: none; }
+  .fake-top { grid-template-columns: 1fr; padding: 0 14px; }
+  .fake-top .nav, .fake-top .right { display: none; }
+  .wsn { white-space: nowrap; }
+  .frame-ph { flex-wrap: wrap; gap: 10px; }
   .frame-body { padding: 14px; }
   .presets span { padding: 0 8px; }
 }

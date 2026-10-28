@@ -38,7 +38,7 @@ describe('ui primitives', () => {
   })
   it('Table: sortable headers expose aria-sort and emit update:sort', async () => {
     const w = mount(Table, {
-      props: { columns: [{ key: 'a', label: 'A', sortable: true }, { key: 'b', label: 'B', align: 'right', sortable: true }], rows: [{ a: 'x', b: 1 }], rowKey: (r: { a: string }) => r.a, sort: { key: 'a', dir: 'asc' } },
+      props: { columns: [{ key: 'a', label: 'A', sortable: true }, { key: 'b', label: 'B', align: 'right', sortable: true }], rows: [{ a: 'x', b: 1 }], rowKey: (r: Record<string, unknown>) => String(r.a), sort: { key: 'a', dir: 'asc' } },
     })
     const ths = w.findAll('th')
     expect(ths[0].attributes('aria-sort')).toBe('ascending')

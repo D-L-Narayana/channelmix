@@ -11,6 +11,7 @@ is dropped (no schema support) so the same migration can be exercised locally.
 import sqlalchemy as sa
 
 from alembic import op
+from app.db import SCHEMA
 
 revision = "0001_initial"
 down_revision = None
@@ -19,7 +20,7 @@ depends_on = None
 
 
 def _schema() -> str | None:
-    return None if op.get_bind().dialect.name == "sqlite" else "channelmix"
+    return None if op.get_bind().dialect.name == "sqlite" else SCHEMA
 
 
 def _ref(table: str) -> str:

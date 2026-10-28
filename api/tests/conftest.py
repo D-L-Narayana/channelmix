@@ -20,6 +20,9 @@ from app.main import app
 API = "/api/v1"
 FIXTURES = Path(__file__).parent / "fixtures"
 PG_URL = os.environ.get("DATABASE_URL", "")
+# The suite drops/creates tables: never point it at the production schema of a shared database.
+if ("supabase" in PG_URL or "pooler" in PG_URL) and os.environ.get("DB_SCHEMA", "channelmix") == "channelmix":
+    raise RuntimeError("refusing to run the test suite against Supabase without a throwaway DB_SCHEMA")
 
 
 @pytest.fixture

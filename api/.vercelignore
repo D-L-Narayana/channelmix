@@ -1,0 +1,7 @@
+.venv
+.venv312
+tests
+.ruff_cache
+__pycache__
+*.db
+.env
