@@ -19,7 +19,7 @@ export const compact = (n: number | null | undefined, currency?: string) => {
   if (abs >= 1_000_000_000) return `${fmt(n / 1_000_000_000, 2)}B`
   if (abs >= 1_000_000) return `${fmt(n / 1_000_000, 2)}M`
   if (abs >= 100_000) return `${fmt(n / 1_000, 1)}K`
-  return fmt(n, currency ? (abs < 100 ? 2 : 0) : 0)
+  return fmt(n, currency && abs > 0 && abs < 100 ? 2 : 0)
 }
 
 export const num = (n: number | string | null | undefined, digits = 0) => {

@@ -36,7 +36,7 @@ const kpis = computed<Kpi[]>(() => {
     { key: 'impressions', label: 'Impressions', value: compact(r.impressions), full: num(r.impressions), delta: dp.impressions ?? null },
     { key: 'clicks', label: 'Clicks', value: compact(r.clicks), full: num(r.clicks), delta: dp.clicks ?? null },
     { key: 'conversions', label: 'Conversions', value: compact(r.conversions), full: num(r.conversions), delta: dp.conversions ?? null },
-    { key: 'cpa', label: 'CPA', value: r.cpa === null ? '–' : money(r.cpa, c, r.cpa < 100 ? 2 : 0), full: money(r.cpa, c, 2), delta: dp.cpa ?? null, betterWhenLower: true },
+    { key: 'cpa', label: 'CPA', value: r.cpa === null ? '–' : money(r.cpa, c, r.cpa < 1000 ? 2 : 0), full: money(r.cpa, c, 2), delta: dp.cpa ?? null, betterWhenLower: true },
     { key: 'roas', label: 'ROAS', value: fmtRoas(r.roas), full: `${fmtRoas(r.roas)} (${money(r.revenue, c, 0)} revenue)`, delta: dp.roas ?? null },
   ]
 })

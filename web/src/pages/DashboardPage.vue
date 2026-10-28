@@ -9,7 +9,7 @@ import { useDateRange } from '../composables/useDateRange'
 import { api, describeError } from '../lib/api'
 import { displayCurrency, loadCurrency } from '../lib/currency'
 import { daysBetween, num } from '../lib/format'
-import type { Channel, RecommendationRequest } from '../lib/types'
+import type { Channel, RecommendationRequest, SummaryReport } from '../lib/types'
 import KpiRow from '../components/KpiRow.vue'
 import DateRangePicker from '../components/DateRangePicker.vue'
 import TrendChart from '../components/TrendChart.vue'
@@ -38,6 +38,11 @@ const mix = useQuery((s) => api.byChannel(key.value, range.value, s), { deps: [r
 const trend = useQuery((s) => api.trend(key.value, range.value, 'channel', s), { deps: [range], refetchOn: DATA_EVENTS })
 const perf = useQuery((s) => api.campaignReport(key.value, range.value, null, s), { deps: [range], refetchOn: DATA_EVENTS })
 const campaigns = useQuery((s) => api.campaigns(key.value, {}, s), { refetchOn: ['campaign.changed', 'import.completed'] })
+
+const zeroSummary: SummaryReport = {
+  start: range.value.start, end: range.value.end, spend: 0, revenue: 0, impressions: 0, clicks: 0, conversions: 0,
+  roas: null, cpa: null, ctr: null, cpc: null, days_with_data: 0, campaigns: 0, previous: null, delta_pct: {},
+}
 
 const recReq = ref<RecommendationRequest>({ lookback_days: 30, min_share: 0.05, max_shift_pct: null, total_budget: null })
 const rec = useQuery((s) => api.recommend(key.value, { ...recReq.value }, s), { deps: [recReq], refetchOn: ['metrics.upserted', 'import.completed'] })
@@ -108,7 +113,9 @@ watch(focus, () => {
     </header>
 
     <!-- Whole-workspace empty state -->
-    <Card v-if="workspaceEmpty" class="emptycard">
+    <template v-if="workspaceEmpty">
+    <KpiRow :report="summary.data.value ?? zeroSummary" :loading="false" :currency="displayCurrency" />
+    <Card class="emptycard">
       <EmptyState title="This workspace has no data yet" body="Import a Google Ads or Meta Ads CSV export, push rows through the REST endpoint, or load the attributed public sample dataset to see the dashboard work.">
         <template #mark><span class="mono">0</span></template>
         <template #actions>
@@ -119,6 +126,7 @@ watch(focus, () => {
       </EmptyState>
       <p class="muted attribution">The sample is a real public dataset (attributed on the Import page) — never loaded automatically.</p>
     </Card>
+    </template>
 
     <!-- Error (unreachable / server) -->
     <Card v-else-if="firstError && !anyLoading"><ErrorState :error="firstError" :retry="retryAll" /></Card>

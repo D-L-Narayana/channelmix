@@ -5,7 +5,6 @@ import { useWorkspaceStore } from '../stores/workspace'
 import { API_URL } from '../lib/api'
 import Button from './ui/Button.vue'
 import Input from './ui/Input.vue'
-import Wordmark from './Wordmark.vue'
 
 const props = defineProps<{ slug: string }>()
 const ws = useWorkspaceStore()
@@ -35,8 +34,6 @@ async function retry() {
 <template>
   <div class="gate">
     <div class="box" role="region" :aria-label="ws.state === 'unreachable' ? 'API unreachable' : 'Workspace key required'">
-      <Wordmark size="md" />
-
       <template v-if="ws.state === 'unreachable'">
         <p class="eyebrow err">API unreachable</p>
         <h1>We can't reach the ChannelMix API.</h1>
@@ -73,9 +70,9 @@ async function retry() {
 </template>
 
 <style scoped>
-.gate { min-height: 100dvh; display: grid; place-items: center; padding: 24px; }
+.gate { min-height: min(60dvh, 560px); display: grid; place-items: center; padding: 24px; }
 .box { width: 100%; max-width: 520px; display: flex; flex-direction: column; gap: 12px; }
-.eyebrow { margin-top: 24px; }
+.eyebrow { margin-top: 0; }
 .eyebrow.err { color: var(--error); }
 h1 { font-size: var(--fs-24); line-height: 1.25; }
 .slug { font-size: 0.8em; color: var(--text); background: var(--surface-2); padding: 2px 6px; border-radius: 4px; border: 1px solid var(--border); }

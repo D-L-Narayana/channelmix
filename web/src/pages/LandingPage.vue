@@ -101,9 +101,9 @@ const zeroSummary: SummaryReport = {
         <h1>One live view of ad spend across Google, Meta and Amazon — with a budget split that pays back more.</h1>
         <p class="lead">Create a workspace, import your real exports or push rows through the API, and watch spend, ROAS and the recommended reallocation update as data lands.</p>
         <ul class="steps" aria-label="How it works">
-          <li><span class="n mono">1</span>Create a workspace — name + email, no password. You get an API key once.</li>
-          <li><span class="n mono">2</span>Drop a Google Ads or Meta Ads CSV, or <span class="mono">POST /metrics/bulk</span>. Preview the mapping before anything is written.</li>
-          <li><span class="n mono">3</span>The dashboard streams updates over SSE; recommendations use your own response curves.</li>
+          <li><span class="n mono">1</span><span>Create a workspace — name + email, no password. You get an API key once.</span></li>
+          <li><span class="n mono">2</span><span>Drop a Google Ads or Meta Ads CSV, or <span class="mono">POST /metrics/bulk</span>. Preview the mapping before anything is written.</span></li>
+          <li><span class="n mono">3</span><span>The dashboard streams updates over SSE; recommendations use your own response curves.</span></li>
         </ul>
         <p class="status">
           <template v-if="health.loading.value"><Badge tone="neutral" dot>Checking API…</Badge></template>
@@ -142,7 +142,7 @@ const zeroSummary: SummaryReport = {
         <div class="fake-top">
           <div class="left"><Wordmark size="sm" /><span class="sep">/</span><span class="wsn">Your workspace</span></div>
           <div class="nav"><span class="on">Dashboard</span><span>Import</span><span>Settings</span></div>
-          <div class="right"><span class="live"><i /> Live · updated 0s ago</span></div>
+          <div class="right"><span class="live"><i /> Live updates connect here</span></div>
         </div>
         <div class="frame-body">
           <div class="frame-ph">
@@ -203,7 +203,7 @@ h1 { font-size: clamp(1.75rem, 3.2vw, 2.75rem); font-weight: 500; letter-spacing
 .fake-top .nav .on { color: var(--text-strong); box-shadow: 0 2px 0 var(--accent); padding-bottom: 14px; margin-bottom: -16px; }
 .fake-top .right { display: flex; justify-content: flex-end; }
 .live { display: inline-flex; align-items: center; gap: 7px; font-size: var(--fs-12); color: var(--text); border: 1px solid var(--border); border-radius: var(--r-pill); padding: 0 8px; height: 24px; background: var(--surface-2); }
-.live i { width: 7px; height: 7px; border-radius: 50%; background: var(--success); box-shadow: 0 0 0 3px var(--success-soft); }
+.live i { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); }
 .frame-body { padding: 20px; display: flex; flex-direction: column; gap: 16px; }
 .frame-ph { display: flex; justify-content: space-between; align-items: center; }
 .frame-ph h2 { font-size: var(--fs-20); }
