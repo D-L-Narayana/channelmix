@@ -1,54 +1,64 @@
-# ChannelMix — Cross-channel Ad Spend Dashboard & Budget Optimizer
+<div align="center">
+
+# ChannelMix
+
+**One live view of ad spend across Google, Meta and Amazon — with a budget split that pays back more.**
+
+[![CI](https://github.com/D-L-Narayana/channelmix/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/D-L-Narayana/channelmix/actions/workflows/ci.yml)
+[![Python 3.12](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)](api/pyproject.toml)
+[![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![Vue 3](https://img.shields.io/badge/Vue-3-4FC08D?logo=vuedotjs&logoColor=white)](https://vuejs.org/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
+<a href="https://channelmix.vercel.app"><img src="docs/screenshots/dashboard.png" alt="ChannelMix dashboard — KPIs, spend trend by channel, spend vs revenue share" width="100%"></a>
+
+</div>
+
+## Live
 
 | | |
 |---|---|
-| **Web (live)** | https://channelmix.vercel.app |
-| **API (live)** | https://channelmix-api.vercel.app — health: `/health`, OpenAPI: `/docs`, spec: `/api/v1/openapi.json` |
-| **Contract** | [`api/CONTRACT.md`](api/CONTRACT.md) (v1) |
+| **Web app** | https://channelmix.vercel.app |
+| **API** | https://channelmix-api.vercel.app — health: [`/health`](https://channelmix-api.vercel.app/health) · OpenAPI UI: [`/docs`](https://channelmix-api.vercel.app/docs) · spec: [`/api/v1/openapi.json`](https://channelmix-api.vercel.app/api/v1/openapi.json) |
+| **API contract** | [`api/CONTRACT.md`](api/CONTRACT.md) (v1) |
+| **Benchmarks** | [`docs/benchmarks.md`](docs/benchmarks.md) |
 
-ChannelMix unifies spend and performance from **Google Ads, Meta Ads, Amazon Ads (and anything else via CSV / REST)**
-into one data model and one dashboard, computes channel-level KPIs (ROAS, CPA, CTR, CPC) and recommends how to
-**reallocate daily budget toward the channel with the highest *marginal* ROAS** — with an explanation for every
-recommendation.
+## What it does
 
-It is a real multi-tenant product, not a demo: open the URL, create a workspace (name + email, no password), drop in
-your Google Ads / Meta Ads Manager export and watch the dashboard update live. There is no bundled mock data and no
-"demo mode" — if the API is unreachable the UI says so and offers a Retry.
+- Unifies spend and performance from **Google Ads, Meta Ads, Amazon Ads** (and anything else via CSV / REST) into one data model and one dashboard.
+- Computes channel-level KPIs — **ROAS, CPA, CTR, CPC** — with period-over-period deltas and campaign drill-down.
+- Recommends how to **reallocate daily budget toward the channel with the highest *marginal* ROAS**, with a plain-English explanation for every recommendation.
+- Is a real multi-tenant product: open the URL, create a workspace (name + email, no password), drop in your Google Ads / Meta Ads Manager export and watch the dashboard update live over SSE.
+- Ships **no bundled mock data and no "demo mode"** — if the API is unreachable the UI says so and offers a Retry.
 
-| Layer | Stack |
-|---|---|
-| API | Python 3.12 · FastAPI · SQLAlchemy 2 · PostgreSQL 17 on Supabase (psycopg 3, schema `channelmix`) · Alembic · SQLite for tests · Redis optional (in-memory LRU fallback) |
-| Web | Vue 3 · Vite · TypeScript · Pinia · ECharts · Vitest · General Sans (Fontshare) · dark theme |
-| Quality | pytest + **pytest-bdd (Gherkin)** · ruff · Vitest · GitHub Actions (Postgres + Redis service containers, Docker build) |
-| Hosting | Vercel: `channelmix` (static SPA, root `web/`) + `channelmix-api` (Python serverless, root `api/`, region `bom1`) |
-| Ops (local) | Docker Compose (api, web, postgres, redis, elasticsearch, logstash, kibana) · structured JSON request logs → ELK |
+## Screenshots
 
----
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/channel-mix.png" alt="Spend trend and channel mix"><br><sub><b>Overview</b> — 7-day spend trend per channel next to share of spend vs share of revenue, with ROAS per channel.</sub></td>
+    <td width="50%"><img src="docs/screenshots/budget-recommendations.png" alt="Budget reallocation recommendations"><br><sub><b>Budget recommendations</b> — fitted response curves, marginal ROAS before/after, shift caps and an explanation per channel.</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/campaign.png" alt="Campaign drill-down"><br><sub><b>Campaign drill-down</b> — per-campaign KPIs, daily spend and conversions, raw daily rows.</sub></td>
+    <td><img src="docs/screenshots/import-preview.png" alt="CSV import preview"><br><sub><b>CSV import preview</b> — detected format and confidence, column mapping, first 10 rows as they will be stored, nothing written until you commit.</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/landing.png" alt="Landing and workspace signup"><br><sub><b>Landing</b> — create a workspace in one step, or open an existing one with its slug and key.</sub></td>
+    <td><img src="docs/screenshots/openapi.png" alt="OpenAPI documentation"><br><sub><b>OpenAPI</b> — every endpoint documented and runnable at <code>/docs</code>.</sub></td>
+  </tr>
+</table>
 
-## Architecture
-
-```mermaid
-flowchart LR
-  B[Browser] -->|HTTPS| W["channelmix.vercel.app<br/>Vue 3 SPA (web/)"]
-  W -->|"/api/v1 · X-Api-Key · JSON"| A["channelmix-api.vercel.app<br/>FastAPI serverless (api/)"]
-  W -->|"GET /api/v1/stream (SSE)"| A
-  A -->|"psycopg 3 · NullPool · no prepared statements"| P[("Supabase Postgres 17<br/>pooler :6543 (transaction)<br/>schema channelmix")]
-  M["alembic upgrade head"] -->|"pooler :5432 (session)"| P
-  A -.->|optional REDIS_URL| R[(Redis)]
-  A -->|JSON lines| L[stdout → Logstash → Elasticsearch → Kibana]
-```
-
-**Request flow.** Every request except `POST /workspaces` and `/health` carries `X-Api-Key`. The key resolves to a
-workspace; every query is scoped to it, and any id that belongs to another workspace is a `404` (indistinguishable
-from "does not exist"). Writes append an `events` row; `GET /api/v1/stream` tails that table and pushes
-`text/event-stream` events (the function closes the stream after ~25 s, `EventSource` reconnects with `Last-Event-ID`,
-nothing is lost). Reports are cached per workspace (`cm:{workspace}:{report}:{hash}`, per-workspace index set for exact
-invalidation) in Redis or, when `REDIS_URL` is unset, an in-process LRU.
+<details>
+<summary>Full dashboard page (KPIs → charts → campaign table → recommendations)</summary>
+<br>
+<img src="docs/screenshots/dashboard-full.png" alt="Full dashboard page">
+</details>
 
 ## Features
 
 - **Self-serve workspaces** — `POST /api/v1/workspaces {name, email}` returns an API key (shown once) and a magic URL
-  `/w/<slug>?key=…`; the web app stores the key in `localStorage`. True multi-tenancy, verified by tests + Gherkin.
+  `/w/<slug>?key=…`; the web app stores the key in `localStorage` and strips it from the URL. True multi-tenancy, verified by tests + Gherkin.
 - **CSV import with format detection** — accepts the real export formats of **Google Ads** (`Campaign`, `Cost`,
   `Impressions`, `Clicks`, `Conversions`, `Day`, …), **Meta Ads Manager** (`Campaign name`, `Amount spent (INR)`,
   `Link clicks`, `Results`, `Day`, …) and a generic template; `dry_run=true` returns the detected format, confidence,
@@ -72,27 +82,78 @@ invalidation) in Redis or, when `REDIS_URL` is unset, an in-process LRU.
 - **Structured JSON request logging** — `request_id`, `workspace_id`, `method`, `path`, `status`, `latency_ms` per
   request; `X-Request-ID` honoured and returned; Logstash pipeline in [`elk/logstash.conf`](elk/logstash.conf).
 
-## API
+## Architecture
 
-Base: `https://channelmix-api.vercel.app/api/v1`. Auth header: `X-Api-Key: cmx_…`. Report endpoints accept
-`start` / `end` (ISO dates, default last 30 days). Full details in [`api/CONTRACT.md`](api/CONTRACT.md).
+```mermaid
+flowchart LR
+  B[Browser] -->|HTTPS| W["channelmix.vercel.app<br/>Vue 3 SPA (web/)"]
+  W -->|"/api/v1 · X-Api-Key · JSON"| A["channelmix-api.vercel.app<br/>FastAPI serverless (api/)"]
+  W -->|"GET /api/v1/stream (SSE)"| A
+  A -->|"psycopg 3 · NullPool · no prepared statements"| P[("Supabase Postgres 17<br/>pooler :6543 (transaction)<br/>schema channelmix")]
+  M["alembic upgrade head"] -->|"pooler :5432 (session)"| P
+  A -.->|optional REDIS_URL| R[(Redis)]
+  A -->|JSON lines| L[stdout → Logstash → Elasticsearch → Kibana]
+```
 
-| Method | Path | Description |
-|---|---|---|
-| GET | `/health` *(no prefix)* | liveness, cache backend, database dialect |
-| POST | `/workspaces` | create workspace → `201 {api_key, workspace_url, …}` (key shown once) |
-| GET | `/workspaces/me` | my workspace + stats (campaigns, rows, imports, date span) |
-| GET / POST | `/campaigns?channel=&status=` | list / create (409 on duplicate `external_id`) |
-| GET / PATCH / DELETE | `/campaigns/{id}` | campaign CRUD (cross-workspace ⇒ 404) |
-| POST | `/metrics/bulk` | idempotent bulk upsert (`Idempotency-Key`, ≤100k rows, auto-creates campaigns) |
-| GET / DELETE | `/metrics?campaign_id=&start=&end=` | raw daily rows / delete a campaign's rows |
-| POST | `/imports/csv` | multipart `file` (+ `dry_run`, `format`, `channel`) → detection, mapping, preview, result |
-| GET | `/imports`, `/imports/{id}` | import history |
-| GET | `/reports/summary` · `/reports/by-channel` · `/reports/trend?group_by=channel\|total` · `/reports/campaigns` | reports |
-| GET / POST | `/recommendations` · `/recommendations/budget` | budget reallocation + explanations |
-| GET | `/stream` | Server-Sent Events (`ready`, `import.completed`, `metrics.upserted`, `campaign.changed`, heartbeats) |
-| GET | `/events?after=` | polling fallback for `/stream` |
-| GET / POST | `/datasets/sample`, `/datasets/sample/info`, `/datasets/sample/import` | public sample dataset (opt-in) |
+**Request flow.** Every request except `POST /workspaces` and `/health` carries `X-Api-Key`. The key resolves to a
+workspace; every query is scoped to it, and any id that belongs to another workspace is a `404` (indistinguishable
+from "does not exist"). Writes append an `events` row; `GET /api/v1/stream` tails that table and pushes
+`text/event-stream` events (the function closes the stream after ~25 s, `EventSource` reconnects with `Last-Event-ID`,
+nothing is lost). Reports are cached per workspace (`cm:{workspace}:{report}:{hash}`, per-workspace index set for exact
+invalidation) in Redis or, when `REDIS_URL` is unset, an in-process LRU.
+
+### Data model (PostgreSQL schema `channelmix`, Alembic in `api/alembic/`)
+
+```
+workspaces        id, slug UNIQUE, name, email, api_key_hash UNIQUE, created_at
+campaigns         id, workspace_id ─▶ workspaces, channel ENUM(google|meta|amazon|linkedin|other), external_id, name, status, daily_budget, created_at, updated_at
+                  UNIQUE (workspace_id, channel, external_id)   INDEX (workspace_id, channel)
+daily_metrics     id, campaign_id ─▶ campaigns, day, impressions, clicks, conversions, spend NUMERIC(14,4), revenue NUMERIC(14,4), updated_at
+                  UNIQUE (campaign_id, day)  ← ON CONFLICT target     INDEX (day)
+imports           id, workspace_id, source, filename, status, rows_received, rows_upserted, campaigns_created, warnings_json, detail_json, created_at
+events            id, workspace_id, type, payload_json, created_at     (append-only; backs /stream and /events)
+idempotency_keys  (workspace_id, key) PK, request_hash (sha256 of body), response_json, created_at
+```
+
+SQLite (tests / local) has no schemas, so the engine carries a `schema_translate_map` that strips `channelmix.` —
+the same models, queries and migration run unchanged.
+
+## Tech stack
+
+| Layer | Stack |
+|---|---|
+| API | Python 3.12 · FastAPI · SQLAlchemy 2 · PostgreSQL 17 on Supabase (psycopg 3, schema `channelmix`) · Alembic · SQLite for tests · Redis optional (in-memory LRU fallback) |
+| Web | Vue 3 · Vite · TypeScript · Pinia · ECharts · Vitest · General Sans (Fontshare) · dark theme |
+| Quality | pytest + **pytest-bdd (Gherkin)** · ruff · Vitest · GitHub Actions (Postgres + Redis service containers, Docker build) |
+| Hosting | Vercel: `channelmix` (static SPA, root `web/`) + `channelmix-api` (Python serverless, root `api/`, region `bom1`) |
+| Ops (local) | Docker Compose (api, web, postgres, redis, elasticsearch, logstash, kibana) · structured JSON request logs → ELK |
+
+## Quick start
+
+### Docker Compose (everything)
+
+```bash
+# api :8000, web :5173, postgres, redis, elasticsearch, logstash, kibana :5601
+docker compose up --build
+```
+
+### API only (uvicorn)
+
+```bash
+cd api && python3 -m venv .venv && . .venv/bin/activate && pip install -e '.[dev]'
+cp .env.example .env      # DATABASE_URL (sqlite:///./channelmix.db works), optional REDIS_URL
+alembic upgrade head
+uvicorn app.main:app --reload
+```
+
+### Web (Vite)
+
+```bash
+cd web && npm ci
+VITE_API_URL=http://localhost:8000 npm run dev
+```
+
+### Try the hosted API from the terminal
 
 ```bash
 API=https://channelmix-api.vercel.app/api/v1
@@ -113,60 +174,90 @@ curl -s  $API/recommendations -H "X-Api-Key: $KEY"
 curl -N  $API/stream -H "X-Api-Key: $KEY" -H 'Accept: text/event-stream'
 ```
 
-## Data model (PostgreSQL schema `channelmix`, Alembic in `api/alembic/`)
+## API overview
 
-```
-workspaces        id, slug UNIQUE, name, email, api_key_hash UNIQUE, created_at
-campaigns         id, workspace_id ─▶ workspaces, channel ENUM(google|meta|amazon|other), external_id, name, status, daily_budget, created_at, updated_at
-                  UNIQUE (workspace_id, channel, external_id)   INDEX (workspace_id, channel)
-daily_metrics     id, campaign_id ─▶ campaigns, day, impressions, clicks, conversions, spend NUMERIC(14,4), revenue NUMERIC(14,4), updated_at
-                  UNIQUE (campaign_id, day)  ← ON CONFLICT target     INDEX (day)
-imports           id, workspace_id, source, filename, status, rows_received, rows_upserted, campaigns_created, warnings_json, detail_json, created_at
-events            id, workspace_id, type, payload_json, created_at     (append-only; backs /stream and /events)
-idempotency_keys  (workspace_id, key) PK, request_hash (sha256 of body), response_json, created_at
-```
+Base: `https://channelmix-api.vercel.app/api/v1`. Auth header: `X-Api-Key: cmx_…`. Report endpoints accept
+`start` / `end` (ISO dates, default last 30 days). Full request/response shapes in [`api/CONTRACT.md`](api/CONTRACT.md);
+interactive docs at [`/docs`](https://channelmix-api.vercel.app/docs).
 
-SQLite (tests / local) has no schemas, so the engine carries a `schema_translate_map` that strips `channelmix.` —
-the same models, queries and migration run unchanged.
+| Method | Path | Description |
+|---|---|---|
+| GET | `/health` *(no prefix)* | liveness, cache backend, database dialect |
+| POST | `/workspaces` | create workspace → `201 {api_key, workspace_url, …}` (key shown once) |
+| GET | `/workspaces/me` | my workspace + stats (campaigns, rows, imports, date span) |
+| GET / POST | `/campaigns?channel=&status=` | list / create (409 on duplicate `external_id`) |
+| GET / PATCH / DELETE | `/campaigns/{id}` | campaign CRUD (cross-workspace ⇒ 404) |
+| POST | `/metrics/bulk` | idempotent bulk upsert (`Idempotency-Key`, ≤100k rows, auto-creates campaigns) |
+| GET / DELETE | `/metrics?campaign_id=&start=&end=` | raw daily rows / delete a campaign's rows |
+| POST | `/imports/csv` | multipart `file` (+ `dry_run`, `format`, `channel`) → detection, mapping, preview, result |
+| GET | `/imports`, `/imports/{id}` | import history |
+| GET | `/reports/summary` · `/reports/by-channel` · `/reports/trend?group_by=channel\|total` · `/reports/campaigns` | reports |
+| GET / POST | `/recommendations` · `/recommendations/budget` | budget reallocation + explanations |
+| GET | `/stream` | Server-Sent Events (`ready`, `import.completed`, `metrics.upserted`, `campaign.changed`, heartbeats) |
+| GET | `/events?after=` | polling fallback for `/stream` |
+| GET / POST | `/datasets/sample`, `/datasets/sample/info`, `/datasets/sample/import` | public sample dataset (opt-in) |
+
+## CSV formats supported
+
+Upload the export as-is — UTF-8, UTF-8-BOM and UTF-16 are handled; `,` `;` and tab delimiters are auto-detected;
+Google Ads preamble lines and `Total` rows are skipped. Sample files live in [`api/tests/fixtures/`](api/tests/fixtures/).
+
+| Format | Detected from | Mapped columns |
+|---|---|---|
+| **Google Ads** campaign report | `Campaign`, `Cost`, `Conv. value`, `Campaign ID`, 2-line report preamble | `Day` → day · `Campaign` → name · `Campaign ID` → external id · `Cost` → spend · `Impressions` · `Clicks` · `Conversions` · `Conv. value` → revenue · `Currency code` → currency |
+| **Meta Ads Manager** export | `Campaign name`, `Amount spent (XXX)`, `Link clicks`, `Results` | `Day` → day · `Campaign name` → name (slugified → external id) · `Amount spent (INR)` → spend + currency · `Impressions` · `Link clicks` → clicks · `Results` → conversions · `Purchases conversion value` → revenue |
+| **Generic** template | header `day,channel,campaign,external_id,impressions,clicks,conversions,spend,revenue` | 1:1; `channel` may be omitted and supplied via the `channel` form field. Download the template from the Import page. |
+
+Auto-detection can be overridden with `format=google_ads|meta_ads|generic`. Numbers like `"1,234.56"` and `"45,678"`
+are parsed; rows with an unparseable day are skipped and reported in `warnings`.
 
 ## Testing
 
 ```bash
 cd api && . .venv/bin/activate
-pytest -q        # 117 tests: workspaces/isolation, CSV detection (Google/Meta/generic), bulk + idempotency, reports,
-                 # recommender, cache, SSE/events, sample dataset, logging, BDD (6 .feature files)
+pytest -q        # 119 tests: workspaces/isolation, CSV detection (Google/Meta/generic), bulk + idempotency, reports,
+                 # recommender, cache, SSE/events, sample dataset, logging, abuse limits,
+                 # and 20 pytest-bdd scenarios from 6 .feature files
 ruff check . && ruff format --check .
 
 cd web
-npx vitest run   # 39 tests: API client, stores (workspace/live), KPI row, campaign table, CSV preview, ui primitives, format
+npx vitest run   # 39 tests in 8 files: API client, stores (workspace/live), KPI row, campaign table, CSV preview, ui primitives, format
 npm run build    # vue-tsc + vite
 ```
 
+| Suite | Count | Covers |
+|---|---|---|
+| pytest (API) | **119** | `test_workspaces_campaigns` (19) · `test_csv_import` (23) · `test_metrics_bulk` (15) · `test_reports` (14) · `test_recommender_and_cache` (17) · `test_stream_and_datasets` (7) · `test_logging` (2) · `test_abuse_limits` (2) · `test_bdd` (20) |
+| pytest-bdd (Gherkin) | **20 scenarios / 6 features** | `workspace_isolation` · `csv_import` · `metrics_ingestion` · `reports` · `budget_reallocation` · `live_events` |
+| Vitest (web) | **39** | API client, workspace/live stores, KPI row, campaign table, CSV preview, UI primitives, formatters |
+
 The API suite refuses to run against a Supabase/pooler `DATABASE_URL` unless `DB_SCHEMA` points at a throwaway
-schema (it drops and recreates tables). CI (`.github/workflows/ci.yml`) runs the suite on SQLite and on Postgres +
-Redis service containers, then builds `api/Dockerfile`. Benchmarks: `scripts/bench_bulk_upsert.py` →
-[docs/benchmarks.md](docs/benchmarks.md).
+schema (it drops and recreates tables). CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs the suite on
+SQLite and on Postgres + Redis service containers, lints with ruff, runs Vitest + `vue-tsc`, then builds `api/Dockerfile`.
 
-## Run locally
+## Benchmarks
 
-```bash
-# everything (api :8000, web :5173, postgres, redis, elasticsearch, logstash, kibana :5601)
-docker compose up --build
+`scripts/bench_bulk_upsert.py` creates 50 campaigns × 1,000 days (50k `daily_metrics` rows) and times the cold insert,
+warm upsert, a 10k-row HTTP bulk request end-to-end and an idempotent replay, on SQLite and PostgreSQL (also run in CI). Results and methodology: [docs/benchmarks.md](docs/benchmarks.md).
 
-# API only
-cd api && python3 -m venv .venv && . .venv/bin/activate && pip install -e '.[dev]'
-cp .env.example .env      # DATABASE_URL (sqlite:///./channelmix.db works), optional REDIS_URL
-alembic upgrade head
-uvicorn app.main:app --reload
+## Security & abuse protection
 
-# Web
-cd web && npm ci
-VITE_API_URL=http://localhost:8000 npm run dev
-```
+| Concern | What ChannelMix does |
+|---|---|
+| **API keys** | `cmx_` + 40 hex chars, generated with `secrets`; stored **only as SHA-256 hashes** and compared in constant time; shown exactly once (rotate from Settings). |
+| **Tenant isolation** | Every query is scoped by `workspace_id`; a foreign id is a `404`, indistinguishable from "does not exist". Idempotency keys and report caches are scoped per workspace. Covered by tests and the `workspace_isolation.feature` Gherkin suite. |
+| **CORS** | Allow-list only: `https://channelmix.vercel.app`, `http://localhost:5173` (+ `CORS_ORIGINS`). |
+| **Signup throttle** | Public signup is limited to **5 workspaces / IP / hour** and **60 / hour globally** (`429` + `Retry-After`), with a hard cap of 2,000 workspaces (`503`). Caller IPs are stored only as SHA-256 hashes. |
+| **Row quota** | **500k metric rows per workspace** → `413` when exceeded. |
+| **Upload limits** | CSV uploads capped at **25 MB**; bulk JSON at **100k rows per request**. |
+| **Request tracing** | `X-Request-ID` honoured/returned; structured JSON logs carry `request_id` and `workspace_id` (resolved from the key), never the key itself. |
+
+All limits are environment-configurable: `SIGNUP_PER_IP_PER_HOUR`, `SIGNUP_GLOBAL_PER_HOUR`, `MAX_WORKSPACES`,
+`MAX_METRIC_ROWS_PER_WORKSPACE`.
 
 ## Deploy (Vercel)
 
-Two Vercel projects in the same repo, both on team `nvr0910-3257s-projects`:
+Two Vercel projects in the same repo:
 
 | Project | Root dir | Config | Production env vars |
 |---|---|---|---|
@@ -192,17 +283,54 @@ Configuration reference (`api/.env.example`): `DATABASE_URL`, `DB_POOL` (`null|q
 `REDIS_URL`, `CACHE_TTL_SECONDS`, `CACHE_MAX_ENTRIES`, `LOG_LEVEL`, `CORS_ORIGINS`, `SSE_MAX_SECONDS`,
 `SSE_HEARTBEAT_SECONDS`, `PUBLIC_WEB_URL`.
 
-## Repository layout
+## Project structure
 
 ```
-api/            FastAPI app — app/: config, db, models, schemas, auth, deps, csv_import, ingest, events, cache, reports,
-                recommender, routers/ (workspaces, campaigns, metrics, imports, reports, stream, datasets), datasets/ (sample + SOURCE.md)
-api/alembic/    migrations (schema channelmix)     api/api/index.py  Vercel entrypoint     api/CONTRACT.md  API contract v1
-api/tests/      pytest suite, fixtures/ (real Google/Meta export samples), features/*.feature + steps/
-web/            Vue 3 + Vite + TS — src/pages (Landing, Dashboard, Import, Campaign, Settings), components, stores, lib/api.ts, __tests__
-elk/            logstash.conf          scripts/  bench_bulk_upsert.py          docs/  benchmarks.md
+channelmix/
+├── api/                      FastAPI service (Vercel serverless + Docker)
+│   ├── app/
+│   │   ├── main.py           app factory, routers, CORS, logging middleware
+│   │   ├── config.py         settings (env), abuse limits
+│   │   ├── db.py             engine (NullPool / schema_translate_map), sessions
+│   │   ├── models.py         workspaces, campaigns, daily_metrics, imports, events, idempotency_keys
+│   │   ├── auth.py           key generation, SHA-256 hashing, constant-time compare, slugs
+│   │   ├── csv_import.py     format detection (Google Ads / Meta / generic), mapping, preview
+│   │   ├── ingest.py         chunked ON CONFLICT upsert + idempotency
+│   │   ├── reports.py        window-function reports (summary, by-channel, trend, campaigns)
+│   │   ├── recommender.py    log-log OLS response curves + greedy marginal allocation
+│   │   ├── events.py         append-only event log, SSE
+│   │   ├── cache.py          Redis / in-process LRU report cache
+│   │   ├── routers/          workspaces, campaigns, metrics, imports, reports, stream, datasets
+│   │   └── datasets/         public sample dataset + SOURCE.md
+│   ├── alembic/              migrations (schema channelmix)
+│   ├── api/index.py          Vercel entrypoint
+│   ├── tests/                pytest suite · fixtures/ (real export samples) · features/*.feature + steps/
+│   ├── CONTRACT.md           API contract v1
+│   └── Dockerfile
+├── web/                      Vue 3 + Vite + TypeScript SPA
+│   └── src/
+│       ├── pages/            Landing, Dashboard, Import, Campaign, Settings, NotFound
+│       ├── components/       KpiRow, TrendChart, ChannelMixChart, CampaignTable, BudgetPanel, CsvDropzone, ImportPreview, …
+│       ├── stores/           workspace (key + magic URL), live (SSE)
+│       ├── lib/              api.ts client, types, formatting
+│       └── __tests__/        Vitest
+├── docs/                     benchmarks.md · screenshots/
+├── elk/                      logstash.conf
+├── scripts/                  bench_bulk_upsert.py
+├── .github/workflows/ci.yml
+├── docker-compose.yml        api, web, postgres, redis, elasticsearch, logstash, kibana
+└── LICENSE
 ```
 
-## Abuse limits
+## Roadmap
 
-Self-serve signup is public, so it is throttled: **5 workspaces / IP / hour**, **60 / hour globally**, hard cap of 2,000 workspaces, and a **500k metric-row quota per workspace** (`413` when exceeded). All limits are environment-configurable (`SIGNUP_PER_IP_PER_HOUR`, `SIGNUP_GLOBAL_PER_HOUR`, `MAX_WORKSPACES`, `MAX_METRIC_ROWS_PER_WORKSPACE`). Uploads are capped at 25 MB; bulk JSON at 100k rows per request. API keys are stored only as SHA-256 hashes and compared in constant time.
+- [ ] Amazon Ads and LinkedIn export formats in the CSV detector (the `channel` enum already allows them)
+- [ ] Scheduled pulls from the Google Ads / Meta Marketing APIs (OAuth) alongside CSV
+- [ ] Campaign-level (not just channel-level) budget recommendations with per-campaign floors
+- [ ] Anomaly alerts on spend / ROAS (day-over-day `LAG()` is already computed in the trend report)
+- [ ] Saved views, shareable read-only dashboard links
+- [ ] Multi-currency normalisation (currency is detected and displayed today, not converted)
+
+## License
+
+[MIT](LICENSE) © 2026 D L Narayana
