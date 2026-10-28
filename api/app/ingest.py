@@ -166,7 +166,7 @@ def ingest(
     if current + len(rows) > quota:
         raise HTTPException(
             413,
-            detail=f"Workspace metric-row quota ({quota:,}) would be exceeded; current {current:,}, incoming {len(rows):,}.",
+            detail=f"Workspace metric-row quota ({quota:,}) exceeded: current {current:,}, incoming {len(rows):,}.",
         )
     rows, created, touched = resolve_campaigns(db, workspace_id, rows)
     written = upsert_metrics(db, rows, aggregate=aggregate)
