@@ -1,0 +1,20 @@
+# python
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+*.db
+.env
+
+# node
+node_modules/
+dist/
+.vite/
+coverage/
+
+# misc
+.DS_Store
+.vercel
+*.log

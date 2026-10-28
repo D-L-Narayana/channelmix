@@ -1,20 +1,215 @@
 # ChannelMix — Cross-channel Ad Spend Dashboard & Budget Optimizer
 
-Full-stack app that unifies spend and performance from multiple ad channels (Google, Meta, Amazon — synthetic connectors) into one interface, computes KPIs (CTR, CPC, CPA, ROAS) per channel and recommends how to reallocate budget toward the channels with the best marginal ROAS.
+**Live demo:** https://channelmix.vercel.app (runs standalone on bundled demo data when no API is configured)
 
-**Stack:** Python 3.12 · FastAPI · SQLAlchemy 2 + raw SQL (window functions) · PostgreSQL (Supabase) · Redis (report cache) · Vue 3 + TypeScript + Pinia + ECharts · pytest + pytest-bdd (Gherkin) · Vitest · ELK (Elasticsearch, Logstash, Kibana) via structured JSON logs · Docker Compose · GitHub Actions CI/CD · Vercel (web)
+ChannelMix unifies spend and performance from **Google Ads, Meta Ads and Amazon Ads** into one data model and one
+dashboard, computes channel-level KPIs (ROAS, CPA, CTR, CPC) and recommends how to **reallocate daily budget toward the
+channel with the highest *marginal* ROAS** — with an explanation for every recommendation.
+
+| Layer | Stack |
+|---|---|
+| API | Python 3.11 · FastAPI · SQLAlchemy 2 · PostgreSQL (psycopg 3) — SQLite for tests/local · Redis (in-memory fallback) |
+| Web | Vue 3 · Vite · TypeScript · ECharts · Vitest |
+| Quality | pytest + **pytest-bdd (Gherkin)** · ruff · Vitest · GitHub Actions (Postgres + Redis service containers, Docker build) |
+| Ops | Docker Compose (api, web, postgres, redis, elasticsearch, logstash, kibana) · structured JSON request logs → Logstash → Elasticsearch → Kibana |
+
+---
+
+## Architecture
+
+```
+                 ┌──────────────────────────────┐
+   browser ─────▶│  web/  Vue 3 + Vite + TS      │  Vercel (static)
+                 │  donut/bar mix · trend · table │  VITE_API_URL → live API
+                 │  budget panel · date filter    │  unreachable → src/mock/*.json
+                 └──────────────┬───────────────┘
+                                │ /api/v1  (JSON, CORS)
+                 ┌──────────────▼───────────────┐
+                 │  api/  FastAPI                │
+                 │  ┌──────────┐ ┌─────────────┐ │   X-Request-ID, X-Cache,
+                 │  │ routers  │ │ middleware  │─┼─▶ Idempotent-Replayed headers
+                 │  │ accounts │ │ JSON request│ │
+                 │  │ campaigns│ │ logging     │─┼─▶ stdout JSON lines ─▶ Logstash ─▶ Elasticsearch ─▶ Kibana
+                 │  │ metrics  │ └─────────────┘ │          (elk/logstash.conf)
+                 │  │ reports  │ ┌─────────────┐ │
+                 │  │ recommend│ │ cache       │─┼─▶ Redis  (cm:{account}:{report}:{hash}, per-account index set)
+                 │  └────┬─────┘ └─────────────┘ │   fallback: in-process TTL cache
+                 │       │ SQLAlchemy 2 + raw SQL │
+                 └───────┼───────────────────────┘
+                         ▼
+                 PostgreSQL 16   accounts ─< campaigns ─< daily_metrics   (+ idempotency_keys)
+                 (SQLite for tests)      window functions: SUM() OVER, RANK(), LAG(), AVG() OVER 7-day frame
+```
 
 ## Features
-- REST API (`/api/v1`) for accounts, channels, campaigns, daily metrics and reports; OpenAPI docs at `/docs`.
-- Idempotent bulk metric ingestion (`POST /metrics/bulk`, upsert on `(campaign_id, day)`).
-- Channel-mix and trend reports built with SQL window functions; cached in Redis with per-account invalidation.
-- Budget reallocation recommendation (diminishing-returns ROAS curve per channel, greedy marginal allocation) with an explanation payload the UI renders.
-- Vue 3 dashboard: unified cross-channel view, date-range filters, drill-down per campaign.
-- Structured JSON request logs (request id, account id, latency) → Logstash → Elasticsearch → Kibana dashboard.
-- BDD: Gherkin features executable with pytest-bdd; unit + API tests with pytest; CI runs tests, lint and builds Docker images.
 
-## Run
+- **Unified channel model** — the same `Campaign`/`DailyMetric` shape regardless of channel; `channel` is an enum
+  (`google | meta | amazon`) so reports and the recommender are channel-agnostic.
+- **Versioned REST API** under `/api/v1` with OpenAPI docs at `/docs`; full CRUD for accounts and campaigns.
+- **Idempotent bulk ingestion** — `POST /accounts/{id}/metrics/bulk` does a chunked
+  `INSERT … ON CONFLICT (campaign_id, day) DO UPDATE`. An `Idempotency-Key` header makes retries safe: same key + same
+  body ⇒ stored response replayed (`Idempotent-Replayed: true`); same key + different body ⇒ `422`.
+  ~94k rows/s on SQLite, see [docs/benchmarks.md](docs/benchmarks.md).
+- **Reports built on SQL window functions** — channel mix (`SUM() OVER ()` shares, `RANK() OVER` by ROAS), trend
+  (`AVG()/SUM() OVER (… ROWS BETWEEN 6 PRECEDING AND CURRENT ROW)` 7-day rolling spend & ROAS, `LAG()` day-over-day,
+  running cumulative spend) and campaign drill-down (`PARTITION BY channel` share and rank). Portable across
+  PostgreSQL and SQLite.
+- **Redis report cache with per-account invalidation** — every write (campaign/metric/account change) evicts exactly
+  that account's cached reports; other accounts stay warm. `X-Cache: HIT|MISS` on every report response.
+- **Budget reallocation recommender** — per-channel diminishing-returns response curve fitted from history, greedy
+  marginal allocation with floors and shift caps, explanation payload (see below).
+- **Structured JSON request logging** — `request_id`, `account_id`, `method`, `path`, `status`, `latency_ms` per request,
+  shipped to ELK via [`elk/logstash.conf`](elk/logstash.conf) (latency buckets + route templating for Kibana).
+- **Vue 3 dashboard** — KPI cards, channel-mix donut/bar with click-to-filter, spend & 7-day ROAS trend with zoom,
+  date-range presets/pickers, sortable/searchable campaign drill-down, budget reallocation panel with live controls
+  (budget, max shift, floor, lookback) and per-channel explanations + fitted curve. Falls back to bundled mock JSON
+  (generated by the API's own seed script) when the API is unreachable — the Vercel demo is fully standalone.
+
+## API
+
+Base path: `/api/v1`. All report endpoints accept `start`/`end` (ISO dates, default last 30 days).
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/health` | liveness + active cache backend |
+| GET / POST | `/accounts` | list / create account |
+| GET / PATCH / DELETE | `/accounts/{id}` | read / update / delete (cascades, invalidates cache) |
+| GET / POST | `/accounts/{id}/campaigns?channel=` | list (filter by channel/status) / create (409 on duplicate `external_id`) |
+| GET / PATCH / DELETE | `/accounts/{id}/campaigns/{cid}` | campaign CRUD, scoped to account |
+| POST | `/accounts/{id}/metrics/bulk` | idempotent bulk upsert (`Idempotency-Key` header, ≤100k rows) |
+| GET | `/accounts/{id}/metrics?campaign_id=&start=&end=` | raw daily rows |
+| DELETE | `/accounts/{id}/metrics?campaign_id=` | drop a campaign's metrics |
+| GET | `/accounts/{id}/reports/channel-mix` | spend/revenue share, ROAS/CPA/CTR/CPC, ROAS rank per channel |
+| GET | `/accounts/{id}/reports/trend?group_by=channel\|total` | daily points with 7-day rolling spend/ROAS, DoD change, cumulative spend |
+| GET | `/accounts/{id}/reports/campaigns?channel=` | per-campaign performance, share & ROAS rank within channel |
+| POST | `/accounts/{id}/recommendations/budget` | `{total_budget?, lookback_days, min_share, max_shift_pct?}` → recommendation + explanations |
+
+Example:
+
 ```bash
-docker compose up --build     # api :8000, web :5173, kibana :5601
-cd api && pytest -q           # unit + API + BDD
+curl -X POST localhost:8000/api/v1/accounts/1/metrics/bulk \
+  -H 'Content-Type: application/json' -H 'Idempotency-Key: google-sync-2024-06-01' \
+  -d '{"rows":[{"campaign_id":1,"day":"2024-06-01","impressions":12000,"clicks":240,"conversions":12,"spend":310.5,"revenue":1290.0}]}'
+# {"received":1,"upserted":1,"campaigns_touched":1,"idempotent_replay":false}
+
+curl -X POST localhost:8000/api/v1/accounts/1/recommendations/budget \
+  -H 'Content-Type: application/json' -d '{"total_budget": 3000, "max_shift_pct": 0.3}'
+```
+
+## Data model
+
+```
+accounts            id, name, currency, created_at
+campaigns           id, account_id ─▶ accounts, channel ENUM(google|meta|amazon), external_id, name, status, daily_budget
+                    UNIQUE (account_id, channel, external_id)      INDEX (account_id, channel)
+daily_metrics       id, campaign_id ─▶ campaigns, day, impressions, clicks, conversions, spend NUMERIC(14,4), revenue NUMERIC(14,4), updated_at
+                    UNIQUE (campaign_id, day)   ← ON CONFLICT target      INDEX (day)
+idempotency_keys    key PK, account_id, request_hash (sha256 of body), response_json, created_at
+```
+
+## Caching & invalidation
+
+- Key: `cm:{account_id}:{report}:{sha1(params)[:16]}` — params include the date window, `group_by`, channel filter and
+  the full recommendation request, so different queries never collide.
+- Every key is also added to a per-account **index set** `cm:idx:{account_id}` (Redis `SADD`). Invalidation is
+  `SMEMBERS` + `DEL` on that set — exact, O(keys for that account), no `SCAN` across the keyspace.
+- Triggers: campaign create/update/delete, metrics bulk upsert/delete, account delete. Reads of other accounts are
+  unaffected (covered by tests and a Gherkin scenario).
+- TTL `CACHE_TTL_SECONDS` (default 300s) bounds staleness if an out-of-band write bypasses the API.
+- `REDIS_URL` unset or Redis unreachable ⇒ `InMemoryCache` with identical semantics (used in tests and local dev).
+
+## Recommender
+
+`api/app/recommender.py`
+
+1. **Fit** — for each channel take daily `(spend, revenue)` observations over the lookback window and fit
+   `revenue = a · spend^b` by OLS in log-log space. `b` is clamped to `[0.35, 0.95]` so the curve is concave
+   (diminishing returns) and marginal ROAS `dRev/dSpend = a·b·spend^(b−1)` is strictly decreasing. Degenerate inputs
+   fall back to an anchored default slope (constant spend) or average ROAS (<3 points); the method and R² are reported.
+2. **Allocate** — start each channel at its floor (`min_share × budget`, and `current × (1 − max_shift_pct)` if capped),
+   then distribute the remaining budget in 400 increments, each to the channel with the highest marginal ROAS at its
+   current allocation, respecting caps. With concave curves this greedy procedure equalises marginal ROAS across
+   channels (the optimality condition) wherever floors/caps don't bind.
+3. **Explain** — per channel: current vs recommended spend, delta, current ROAS, marginal ROAS before/after, projected
+   revenue, the fitted curve (`a`, `b`, R², n, method) and a sentence such as
+   *"Increase google by $322/day (+30%): fitted curve revenue = 7.54 · spend^0.92 (loglog_ols, n=30, R²=0.88);
+   marginal ROAS 3.95 at current spend → 3.87 at recommended spend."* plus an overall summary with projected uplift.
+
+The web app ships the same allocator in TypeScript (`web/src/lib/recommender.ts`) so the demo can re-run allocations
+locally from the server-fitted curves when the API is offline.
+
+## Testing
+
+```bash
+cd api && . .venv/bin/activate
+pytest -q                                   # 61 tests: API, unit (recommender/cache), logging, BDD
+DATABASE_URL=postgresql+psycopg://... REDIS_URL=redis://... pytest -q   # same suite on Postgres + Redis (CI does this)
+ruff check . && ruff format --check .
+
+cd web
+npm run test -- --run                       # 15 Vitest component/unit tests (jsdom; charts stubbed)
+npm run lint && npm run build               # vue-tsc + vite
+```
+
+**BDD** — Gherkin features in `api/tests/features/` (`budget_reallocation`, `metrics_ingestion`, `reports`) with
+step definitions in `api/tests/test_bdd.py` (pytest-bdd), e.g.
+
+```gherkin
+Scenario: Shift budget from a weak channel to a strong one
+  Given an account with channels "google" (ROAS 4.0) and "meta" (ROAS 1.5)
+  And a total daily budget of 10000.00
+  When I request a budget recommendation
+  Then "google" receives more budget than "meta"
+  And the recommended budgets sum to 10000.00
+  And every channel has an explanation mentioning marginal ROAS
+```
+
+**Benchmarks** — `scripts/bench_bulk_upsert.py` generates 50k metric rows and times cold insert, warm upsert, an
+end-to-end 10k-row HTTP request and an idempotent replay. Results in [docs/benchmarks.md](docs/benchmarks.md).
+
+**CI** (`.github/workflows/ci.yml`) — `api` job with Postgres 16 + Redis 7 service containers (ruff, pytest on SQLite
+then on Postgres/Redis, bench), `web` job (vue-tsc, Vitest, build), `docker` job (buildx build of `api/Dockerfile`).
+
+## Logging → ELK
+
+Each request emits one JSON line, e.g.
+
+```json
+{"@timestamp":"2024-06-01 10:00:00,123","level":"INFO","logger":"channelmix.request","message":"request",
+ "request_id":"9f1c…","method":"GET","path":"/api/v1/accounts/1/reports/trend","status":200,
+ "account_id":1,"latency_ms":12.4,"client":"172.18.0.1","service":"channelmix-api"}
+```
+
+`X-Request-ID` is honoured if supplied and always returned. In Compose the api container logs via the `gelf` driver to
+Logstash (`elk/logstash.conf`), which unwraps the JSON, adds a `latency_bucket` and a templated `route`
+(`/api/v1/accounts/{id}/reports/trend`) and indexes into `channelmix-api-YYYY.MM.dd`. Kibana: http://localhost:5601.
+
+## Run it
+
+```bash
+# everything (api :8000, web :5173, postgres, redis, elasticsearch, logstash, kibana :5601)
+docker compose up --build
+docker compose exec api python -m app.seed      # demo account with 90 days of Google/Meta/Amazon data
+
+# API only, local
+cd api && python3 -m venv .venv && . .venv/bin/activate && pip install -e '.[dev]'
+DATABASE_URL=sqlite:///./channelmix.db uvicorn app.main:app --reload   # REDIS_URL optional
+python -m app.seed
+
+# Web
+cd web && npm install
+VITE_API_URL=http://localhost:8000 npm run dev    # omit VITE_API_URL to run on bundled demo data
+```
+
+Configuration (`api/.env.example`): `DATABASE_URL`, `REDIS_URL`, `CACHE_TTL_SECONDS`, `LOG_LEVEL`, `CORS_ORIGINS`.
+
+## Repository layout
+
+```
+api/        FastAPI app (app/: config, db, models, schemas, cache, reports, recommender, routers/, logging_middleware, seed)
+api/tests/  pytest suite, features/*.feature + test_bdd.py step definitions
+web/        Vue 3 + Vite + TS dashboard (src/components, src/lib, src/mock, src/__tests__)
+elk/        logstash.conf
+scripts/    bench_bulk_upsert.py, export_mock.py (regenerates web/src/mock from the API)
+docs/       benchmarks.md
 ```

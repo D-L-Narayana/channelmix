@@ -1,31 +1,74 @@
 name: CI
-on: [push, pull_request]
+on:
+  push:
+    branches: [master]
+  pull_request:
+
 jobs:
   api:
+    name: API (ruff + pytest on PostgreSQL/Redis)
     runs-on: ubuntu-latest
     services:
       postgres:
         image: postgres:16
-        env: { POSTGRES_PASSWORD: ci, POSTGRES_DB: channelmix }
+        env:
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: channelmix
         ports: ["5432:5432"]
-        options: --health-cmd pg_isready --health-interval 5s --health-retries 10
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
       redis:
         image: redis:7
         ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 5s --health-timeout 5s --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
-        with: { python-version: "3.12" }
+        with:
+          python-version: "3.11"
+          cache: pip
       - run: pip install -e "api[dev]"
-      - run: ruff check api
-      - run: cd api && pytest -q
+      - name: Lint
+        run: ruff check api && ruff format --check api
+      - name: Tests (SQLite)
+        run: cd api && pytest -q
+      - name: Tests (PostgreSQL + Redis)
+        run: cd api && pytest -q
         env:
           DATABASE_URL: postgresql+psycopg://postgres:ci@localhost:5432/channelmix
           REDIS_URL: redis://localhost:6379/0
+      - name: Bench 50k bulk upsert (PostgreSQL)
+        run: python scripts/bench_bulk_upsert.py
+        env:
+          DATABASE_URL: postgresql+psycopg://postgres:ci@localhost:5432/channelmix
+
   web:
+    name: Web (vue-tsc + vitest + build)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        with: { node-version: 20 }
-      - run: cd web && npm ci && npm run lint && npm run test -- --run && npm run build
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: cd web && npm ci
+      - run: cd web && npm run lint
+      - run: cd web && npm run test -- --run
+      - run: cd web && npm run build
+
+  docker:
+    name: Docker build (api)
+    runs-on: ubuntu-latest
+    needs: [api]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: ./api
+          push: false
+          tags: channelmix-api:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
