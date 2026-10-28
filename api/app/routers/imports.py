@@ -119,9 +119,7 @@ def list_imports(
     ws: Workspace = Depends(current_workspace),
     db: Session = Depends(get_db),
 ):
-    rows = db.scalars(
-        select(Import).where(Import.workspace_id == ws.id).order_by(Import.id.desc()).limit(limit)
-    ).all()
+    rows = db.scalars(select(Import).where(Import.workspace_id == ws.id).order_by(Import.id.desc()).limit(limit)).all()
     return [_import_out(i) for i in rows]
 
 

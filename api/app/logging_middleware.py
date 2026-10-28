@@ -33,6 +33,7 @@ def configure_logging(level: str = "INFO") -> None:
     root = logging.getLogger()
     root.handlers = [handler]
     root.setLevel(level)
+    logging.getLogger("httpx").setLevel(logging.WARNING)
 
 
 class RequestLoggingMiddleware(BaseHTTPMiddleware):

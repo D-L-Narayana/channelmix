@@ -96,9 +96,9 @@ def test_recommend_empty_history():
 
 
 # ---------------- recommendation endpoint ----------------
-def test_budget_recommendation_endpoint(client, seeded):
-    aid = seeded["account"]["id"]
-    r = client.post(f"{API}/accounts/{aid}/recommendations/budget", json={"total_budget": 3000, "lookback_days": 30})
+def test_recommendations_get_endpoint(seeded):
+    ws = seeded["ws"]
+    r = ws.get(f"{API}/recommendations", params={"total_budget": 3000, "lookback_days": 30})
     assert r.status_code == 200, r.text
     body = r.json()
     by = {c["channel"]: c for c in body["channels"]}
@@ -109,14 +109,26 @@ def test_budget_recommendation_endpoint(client, seeded):
     assert body["window_start"] < body["window_end"]
 
 
-def test_budget_recommendation_cached_and_validated(client, seeded):
-    aid = seeded["account"]["id"]
-    url = f"{API}/accounts/{aid}/recommendations/budget"
-    assert client.post(url, json={"total_budget": 3000}).headers["X-Cache"] == "MISS"
-    assert client.post(url, json={"total_budget": 3000}).headers["X-Cache"] == "HIT"
-    assert client.post(url, json={"total_budget": 2999}).headers["X-Cache"] == "MISS"
-    assert client.post(url, json={"total_budget": -1}).status_code == 422
-    assert client.post(url, json={"lookback_days": 2}).status_code == 422
+def test_recommendations_post_matches_get(seeded):
+    ws = seeded["ws"]
+    g = ws.get(f"{API}/recommendations", params={"total_budget": 3000}).json()
+    p = ws.post(f"{API}/recommendations/budget", json={"total_budget": 3000}).json()
+    assert g == p
+
+
+def test_recommendations_cached_and_validated(seeded):
+    ws = seeded["ws"]
+    url = f"{API}/recommendations"
+    assert ws.get(url, params={"total_budget": 3000}).headers["X-Cache"] == "MISS"
+    assert ws.get(url, params={"total_budget": 3000}).headers["X-Cache"] == "HIT"
+    assert ws.get(url, params={"total_budget": 2999}).headers["X-Cache"] == "MISS"
+    assert ws.get(url, params={"total_budget": -1}).status_code == 422
+    assert ws.get(url, params={"lookback_days": 2}).status_code == 422
+
+
+def test_recommendations_empty_workspace(ws):
+    r = ws.get(f"{API}/recommendations", params={"total_budget": 1000})
+    assert r.status_code == 200 and r.json()["channels"] == []
 
 
 # ---------------- cache unit ----------------
@@ -129,14 +141,26 @@ def test_make_key_is_stable_and_namespaced():
 
 def test_memory_cache_ttl_and_invalidate():
     c = InMemoryCache()
-    c.set("cm:1:a", {"x": 1}, ttl=60, account_id=1)
-    c.set("cm:1:b", {"x": 2}, ttl=60, account_id=1)
-    c.set("cm:2:a", {"x": 3}, ttl=60, account_id=2)
+    c.set("cm:1:a", {"x": 1}, ttl=60, workspace_id=1)
+    c.set("cm:1:b", {"x": 2}, ttl=60, workspace_id=1)
+    c.set("cm:2:a", {"x": 3}, ttl=60, workspace_id=2)
     assert c.get("cm:1:a") == {"x": 1}
-    assert c.invalidate_account(1) == 2
+    assert c.invalidate_workspace(1) == 2
     assert c.get("cm:1:a") is None and c.get("cm:1:b") is None
     assert c.get("cm:2:a") == {"x": 3}
-    c.set("cm:3:a", 1, ttl=0, account_id=3)
+    c.set("cm:3:a", 1, ttl=0, workspace_id=3)
     time.sleep(0.01)
     assert c.get("cm:3:a") is None
     assert c.hits == 2 and c.misses == 3
+
+
+def test_memory_cache_is_bounded_lru():
+    c = InMemoryCache(max_entries=3)
+    for i in range(3):
+        c.set(f"cm:1:k{i}", i, ttl=60, workspace_id=1)
+    assert c.get("cm:1:k0") == 0  # touch -> most recently used
+    c.set("cm:2:k3", 3, ttl=60, workspace_id=2)  # evicts k1 (least recently used)
+    assert len(c) == 3 and c.evictions == 1
+    assert c.get("cm:1:k1") is None and c.get("cm:1:k0") == 0 and c.get("cm:2:k3") == 3
+    assert c.invalidate_workspace(1) == 2  # k0 + k2 (evicted k1 no longer indexed)
+    assert len(c) == 1

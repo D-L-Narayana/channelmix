@@ -86,9 +86,7 @@ def resolve_campaigns(db: Session, workspace_id: int, rows: list[dict]) -> tuple
     by_id = {r["campaign_id"] for r in rows if r.get("campaign_id") is not None}
     if by_id:
         owned = set(
-            db.scalars(
-                select(Campaign.id).where(Campaign.workspace_id == workspace_id, Campaign.id.in_(by_id))
-            ).all()
+            db.scalars(select(Campaign.id).where(Campaign.workspace_id == workspace_id, Campaign.id.in_(by_id))).all()
         )
         unknown = by_id - owned
         if unknown:

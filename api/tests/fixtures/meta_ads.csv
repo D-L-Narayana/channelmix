@@ -1,0 +1,5 @@
+﻿Reporting starts,Reporting ends,Campaign name,Campaign delivery,Day,Amount spent (INR),Impressions,Link clicks,Results,Result type,Purchases conversion value,Reach,Frequency
+2025-10-01,2025-10-01,Summer Sale - Conversions,active,2025-10-01,1234.56,45678,1234,12,Purchases,8900,30000,1.52
+2025-10-02,2025-10-02,Summer Sale - Conversions,active,2025-10-02,1300.00,47000,1300,14,Purchases,9800,31000,1.51
+2025-10-01,2025-10-01,Retargeting - Catalog,inactive,2025-10-01,500.25,12000,400,6,Purchases,4100,9000,1.33
+2025-10-02,2025-10-02,Retargeting - Catalog,inactive,2025-10-02,,0,0,0,Purchases,0,0,0

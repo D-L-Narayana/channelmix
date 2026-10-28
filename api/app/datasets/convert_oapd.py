@@ -52,8 +52,17 @@ def convert(src: str, out) -> int:
     for (d, camp, placement), (imp, clk, conv, spend, rev) in sorted(agg.items()):
         ext = f"{camp.lower().replace(' ', '')}-{placement}"
         w.writerow(
-            [d.isoformat(), "other", f"{camp} / placement {placement}", ext, imp, clk, conv,
-             f"{spend.quantize(Decimal('0.0001'))}", f"{rev.quantize(Decimal('0.0001'))}"]
+            [
+                d.isoformat(),
+                "other",
+                f"{camp} / placement {placement}",
+                ext,
+                imp,
+                clk,
+                conv,
+                f"{spend.quantize(Decimal('0.0001'))}",
+                f"{rev.quantize(Decimal('0.0001'))}",
+            ]
         )
         n += 1
     return n

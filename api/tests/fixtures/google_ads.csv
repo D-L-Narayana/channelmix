@@ -1,0 +1,10 @@
+Campaign report
+Oct 1, 2025 - Oct 3, 2025
+Campaign,Campaign ID,Campaign status,Currency code,Day,Cost,Impressions,Clicks,Conversions,Conv. value
+Brand - Search,1234567890,Enabled,INR,2025-10-01,"1,234.56","45,678","1,234",12.00,"8,900.00"
+Brand - Search,1234567890,Enabled,INR,2025-10-02,"1,100.00","40,000","1,100",10.00,"7,500.00"
+Generic - Shopping,9876543210,Paused,INR,2025-10-01,"2,500.00","120,000","3,000",25.00,"19,000.00"
+Generic - Shopping,9876543210,Paused,INR,2025-10-02,--,--,--,--,--
+Generic - Shopping,9876543210,Paused,INR,2025-10-03,"2,600.00","125,000","3,100",26.00,"20,000.00"
+Total: Search campaigns,,,INR,,"2,334.56","85,678","2,334",22.00,"16,400.00"
+Total: Account,,,INR,,"7,434.56","330,678","8,434",73.00,"55,400.00"

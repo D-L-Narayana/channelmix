@@ -54,7 +54,11 @@ def summary_report(
 ):
     start, end = _window(start, end)
     return _cached(
-        cache, ws.id, "summary", {"start": start, "end": end}, response,
+        cache,
+        ws.id,
+        "summary",
+        {"start": start, "end": end},
+        response,
         lambda: _jsonable(reports.summary(db, ws.id, start, end)),
     )
 
@@ -70,7 +74,11 @@ def by_channel_report(
 ):
     start, end = _window(start, end)
     return _cached(
-        cache, ws.id, "by_channel", {"start": start, "end": end}, response,
+        cache,
+        ws.id,
+        "by_channel",
+        {"start": start, "end": end},
+        response,
         lambda: _jsonable(reports.channel_mix(db, ws.id, start, end)),
     )
 
@@ -87,7 +95,11 @@ def trend_report(
 ):
     start, end = _window(start, end)
     return _cached(
-        cache, ws.id, "trend", {"start": start, "end": end, "group_by": group_by}, response,
+        cache,
+        ws.id,
+        "trend",
+        {"start": start, "end": end, "group_by": group_by},
+        response,
         lambda: _jsonable(reports.trend(db, ws.id, start, end, group_by)),
     )
 
@@ -105,7 +117,11 @@ def campaign_report(
     start, end = _window(start, end)
     ch = channel.value if channel else None
     return _cached(
-        cache, ws.id, "campaigns", {"start": start, "end": end, "channel": ch}, response,
+        cache,
+        ws.id,
+        "campaigns",
+        {"start": start, "end": end, "channel": ch},
+        response,
         lambda: reports.campaign_performance(db, ws.id, start, end, ch),
     )
 
@@ -146,7 +162,11 @@ def recommendations(
     cache=Depends(get_cache),
 ):
     req = RecommendationRequest(
-        total_budget=total_budget, lookback_days=lookback_days, min_share=min_share, max_shift_pct=max_shift_pct, end=end
+        total_budget=total_budget,
+        lookback_days=lookback_days,
+        min_share=min_share,
+        max_shift_pct=max_shift_pct,
+        end=end,
     )
     return _recommend(req, response, ws, db, cache)
 

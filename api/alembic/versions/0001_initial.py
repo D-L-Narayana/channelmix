@@ -9,6 +9,7 @@ is dropped (no schema support) so the same migration can be exercised locally.
 """
 
 import sqlalchemy as sa
+
 from alembic import op
 
 revision = "0001_initial"
@@ -24,6 +25,10 @@ def _schema() -> str | None:
 def _ref(table: str) -> str:
     s = _schema()
     return f"{s}.{table}" if s else table
+
+
+def _ws_fk(**kw) -> sa.Column:
+    return sa.Column("workspace_id", sa.Integer(), sa.ForeignKey(_ref("workspaces.id"), ondelete="CASCADE"), **kw)
 
 
 CHANNEL = sa.Enum("google", "meta", "amazon", "linkedin", "other", name="channel", native_enum=False, length=16)
@@ -49,7 +54,9 @@ def upgrade() -> None:
     op.create_table(
         "campaigns",
         sa.Column("id", sa.Integer(), primary_key=True),
-        sa.Column("workspace_id", sa.Integer(), sa.ForeignKey(_ref("workspaces.id"), ondelete="CASCADE"), nullable=False),
+        sa.Column(
+            "workspace_id", sa.Integer(), sa.ForeignKey(_ref("workspaces.id"), ondelete="CASCADE"), nullable=False
+        ),
         sa.Column("channel", CHANNEL, nullable=False),
         sa.Column("external_id", sa.String(100), nullable=False),
         sa.Column("name", sa.String(200), nullable=False),
@@ -81,7 +88,9 @@ def upgrade() -> None:
     op.create_table(
         "imports",
         sa.Column("id", sa.Integer(), primary_key=True),
-        sa.Column("workspace_id", sa.Integer(), sa.ForeignKey(_ref("workspaces.id"), ondelete="CASCADE"), nullable=False),
+        sa.Column(
+            "workspace_id", sa.Integer(), sa.ForeignKey(_ref("workspaces.id"), ondelete="CASCADE"), nullable=False
+        ),
         sa.Column("source", sa.String(20), nullable=False),
         sa.Column("filename", sa.String(255), nullable=True),
         sa.Column("status", sa.String(20), nullable=False),
@@ -98,7 +107,9 @@ def upgrade() -> None:
     op.create_table(
         "events",
         sa.Column("id", sa.Integer(), primary_key=True, autoincrement=True),
-        sa.Column("workspace_id", sa.Integer(), sa.ForeignKey(_ref("workspaces.id"), ondelete="CASCADE"), nullable=False),
+        sa.Column(
+            "workspace_id", sa.Integer(), sa.ForeignKey(_ref("workspaces.id"), ondelete="CASCADE"), nullable=False
+        ),
         sa.Column("type", sa.String(40), nullable=False),
         sa.Column("payload_json", sa.Text(), nullable=False, server_default="{}"),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
@@ -108,7 +119,9 @@ def upgrade() -> None:
 
     op.create_table(
         "idempotency_keys",
-        sa.Column("workspace_id", sa.Integer(), sa.ForeignKey(_ref("workspaces.id"), ondelete="CASCADE"), primary_key=True),
+        sa.Column(
+            "workspace_id", sa.Integer(), sa.ForeignKey(_ref("workspaces.id"), ondelete="CASCADE"), primary_key=True
+        ),
         sa.Column("key", sa.String(128), primary_key=True),
         sa.Column("request_hash", sa.String(64), nullable=False),
         sa.Column("response_json", sa.Text(), nullable=False),

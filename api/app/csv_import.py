@@ -58,9 +58,23 @@ GOOGLE = FormatSpec(
         "revenue": ["conv. value", "conversion value", "all conv. value", "total conv. value"],
         "currency": ["currency code", "currency"],
     },
-    signature={"campaign": 1.5, "cost": 2.0, "day": 1.0, "impressions": 0.5, "impr.": 1.0, "clicks": 0.5,
-               "conversions": 1.0, "conv. value": 1.0, "currency code": 1.5, "campaign id": 0.5,
-               "campaign state": 1.0, "campaign status": 0.5, "campaign type": 1.0, "avg. cpc": 1.0, "ctr": 0.5},
+    signature={
+        "campaign": 1.5,
+        "cost": 2.0,
+        "day": 1.0,
+        "impressions": 0.5,
+        "impr.": 1.0,
+        "clicks": 0.5,
+        "conversions": 1.0,
+        "conv. value": 1.0,
+        "currency code": 1.5,
+        "campaign id": 0.5,
+        "campaign state": 1.0,
+        "campaign status": 0.5,
+        "campaign type": 1.0,
+        "avg. cpc": 1.0,
+        "ctr": 0.5,
+    },
     threshold=5.0,
 )
 
@@ -75,13 +89,31 @@ META = FormatSpec(
         "clicks": ["link clicks", "clicks (all)", "clicks"],
         "conversions": ["results", "purchases", "website purchases", "conversions", "leads"],
         "spend": [_AMOUNT_SPENT, "amount spent"],
-        "revenue": ["purchases conversion value", "website purchases conversion value",
-                    "purchase conversion value", "conversion value"],
+        "revenue": [
+            "purchases conversion value",
+            "website purchases conversion value",
+            "purchase conversion value",
+            "conversion value",
+        ],
     },
-    signature={"campaign name": 2.0, _AMOUNT_SPENT: 3.0, "link clicks": 2.0, "results": 1.0, "result type": 1.0,
-               "reporting starts": 2.0, "reporting ends": 1.0, "impressions": 0.5, "day": 0.5, "reach": 1.0,
-               "frequency": 0.5, "campaign delivery": 1.5, "cpm (cost per 1,000 impressions)": 1.0,
-               "cost per results": 1.0, "clicks (all)": 1.0, "ad set name": 1.0},
+    signature={
+        "campaign name": 2.0,
+        _AMOUNT_SPENT: 3.0,
+        "link clicks": 2.0,
+        "results": 1.0,
+        "result type": 1.0,
+        "reporting starts": 2.0,
+        "reporting ends": 1.0,
+        "impressions": 0.5,
+        "day": 0.5,
+        "reach": 1.0,
+        "frequency": 0.5,
+        "campaign delivery": 1.5,
+        "cpm (cost per 1,000 impressions)": 1.0,
+        "cost per results": 1.0,
+        "clicks (all)": 1.0,
+        "ad set name": 1.0,
+    },
     threshold=5.0,
 )
 
@@ -99,8 +131,16 @@ LINKEDIN = FormatSpec(
         "revenue": ["conversion value"],
         "currency": ["currency"],
     },
-    signature={"start date (in utc)": 3.0, "total spent": 3.0, "campaign name": 1.0, "campaign group name": 2.0,
-               "impressions": 0.5, "clicks": 0.5, "average ctr": 1.0, "average cpc": 1.0},
+    signature={
+        "start date (in utc)": 3.0,
+        "total spent": 3.0,
+        "campaign name": 1.0,
+        "campaign group name": 2.0,
+        "impressions": 0.5,
+        "clicks": 0.5,
+        "average ctr": 1.0,
+        "average cpc": 1.0,
+    },
     threshold=5.0,
 )
 
@@ -118,9 +158,17 @@ AMAZON = FormatSpec(
         "revenue": ["7 day total sales", "14 day total sales", "sales", "revenue"],
         "currency": ["currency"],
     },
-    signature={"7 day total sales": 3.0, "7 day total orders (#)": 3.0, "14 day total sales": 3.0,
-               "total advertising cost of sales (acos)": 2.0, "total return on advertising spend (roas)": 2.0,
-               "portfolio name": 1.0, "spend": 1.0, "campaign name": 1.0, "targeting": 0.5},
+    signature={
+        "7 day total sales": 3.0,
+        "7 day total orders (#)": 3.0,
+        "14 day total sales": 3.0,
+        "total advertising cost of sales (acos)": 2.0,
+        "total return on advertising spend (roas)": 2.0,
+        "portfolio name": 1.0,
+        "spend": 1.0,
+        "campaign name": 1.0,
+        "targeting": 0.5,
+    },
     threshold=5.0,
 )
 
@@ -146,12 +194,25 @@ GENERIC = FormatSpec(
 FORMATS = {f.name: f for f in (GOOGLE, META, LINKEDIN, AMAZON, GENERIC)}
 
 CHANNEL_ALIASES = {
-    "google": Channel.google, "google ads": Channel.google, "adwords": Channel.google, "google adwords": Channel.google,
-    "youtube": Channel.google, "search": Channel.google, "gads": Channel.google,
-    "meta": Channel.meta, "facebook": Channel.meta, "facebook ads": Channel.meta, "meta ads": Channel.meta,
-    "instagram": Channel.meta, "fb": Channel.meta, "ig": Channel.meta,
-    "amazon": Channel.amazon, "amazon ads": Channel.amazon, "sponsored products": Channel.amazon,
-    "linkedin": Channel.linkedin, "linkedin ads": Channel.linkedin,
+    "google": Channel.google,
+    "google ads": Channel.google,
+    "adwords": Channel.google,
+    "google adwords": Channel.google,
+    "youtube": Channel.google,
+    "search": Channel.google,
+    "gads": Channel.google,
+    "meta": Channel.meta,
+    "facebook": Channel.meta,
+    "facebook ads": Channel.meta,
+    "meta ads": Channel.meta,
+    "instagram": Channel.meta,
+    "fb": Channel.meta,
+    "ig": Channel.meta,
+    "amazon": Channel.amazon,
+    "amazon ads": Channel.amazon,
+    "sponsored products": Channel.amazon,
+    "linkedin": Channel.linkedin,
+    "linkedin ads": Channel.linkedin,
 }
 
 
@@ -165,8 +226,24 @@ def parse_channel(value: str | None) -> Channel | None:
 
 
 # ---------------------------------------------------------------- decoding / header detection
-HEADER_TOKENS = {"campaign", "campaign name", "day", "date", "cost", "spend", "impressions", "impr.", "clicks",
-                 "conversions", "results", "link clicks", "reporting starts", "channel", "revenue", "total spent"}
+HEADER_TOKENS = {
+    "campaign",
+    "campaign name",
+    "day",
+    "date",
+    "cost",
+    "spend",
+    "impressions",
+    "impr.",
+    "clicks",
+    "conversions",
+    "results",
+    "link clicks",
+    "reporting starts",
+    "channel",
+    "revenue",
+    "total spent",
+}
 
 
 def decode(raw: bytes) -> str:
@@ -255,6 +332,7 @@ def build_mapping(spec: FormatSpec, headers: list[str]) -> tuple[dict[str, str |
 
 # ---------------------------------------------------------------- value parsing
 _NUM_CLEAN = re.compile(r"[^0-9,.\-]")
+_EURO_NUM = re.compile(r"^-?\d{1,3}(\.\d{3})*,\d{1,2}$|^-?\d+,\d{1,2}$")  # 1.234,56 / 12,5
 
 
 def parse_number(raw: str | None, european: bool = False) -> Decimal | None:
@@ -266,7 +344,7 @@ def parse_number(raw: str | None, european: bool = False) -> Decimal | None:
     s = _NUM_CLEAN.sub("", s.replace("\u00a0", ""))
     if not s:
         return None
-    if european or ("," in s and "." not in s and re.search(r",\d{1,2}$", s)):
+    if european or _EURO_NUM.match(s):
         s = s.replace(".", "").replace(",", ".")
     else:
         s = s.replace(",", "")
@@ -276,20 +354,32 @@ def parse_number(raw: str | None, european: bool = False) -> Decimal | None:
         return None
 
 
-DATE_FORMATS = ("%Y-%m-%d", "%Y/%m/%d", "%Y%m%d", "%d %b %Y", "%b %d, %Y", "%B %d, %Y", "%d %B %Y",
-                "%d-%b-%Y", "%d.%m.%Y", "%d-%m-%Y", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S")
+DATE_FORMATS = (
+    "%Y-%m-%d",
+    "%Y/%m/%d",
+    "%Y%m%d",
+    "%d %b %Y",
+    "%b %d, %Y",
+    "%B %d, %Y",
+    "%d %B %Y",
+    "%d-%b-%Y",
+    "%d.%m.%Y",
+    "%d-%m-%Y",
+    "%Y-%m-%dT%H:%M:%S",
+    "%Y-%m-%d %H:%M:%S",
+)
 _SLASH = re.compile(r"^(\d{1,2})/(\d{1,2})/(\d{2,4})$")
 
 
-def infer_day_first(values: list[str]) -> bool:
-    """For ambiguous d/m/y vs m/d/y columns: day-first if any first component exceeds 12."""
+def infer_day_first(values: list[str], default: bool = False) -> bool:
+    """For ambiguous d/m/y vs m/d/y columns: day-first if any first component exceeds 12 (else ``default``)."""
     for v in values:
         m = _SLASH.match(v.strip())
         if m and int(m.group(1)) > 12:
             return True
         if m and int(m.group(2)) > 12:
             return False
-    return False
+    return default
 
 
 def parse_day(raw: str | None, day_first: bool = False) -> date | None:
@@ -361,8 +451,6 @@ def parse_csv(
     fmt_name, confidence = (format_override, 1.0) if format_override else detect_format(norm_headers)
     spec = FORMATS[fmt_name]
     mapping, currency = build_mapping(spec, headers)
-    if not mapping["currency"] and fmt_name != "generic" and currency is None:
-        pass
     warnings: list[str] = []
 
     if not mapping["day"]:
@@ -371,15 +459,21 @@ def parse_csv(
         raise ValueError("no campaign column detected (expected 'Campaign' / 'Campaign name')")
     if not mapping["spend"]:
         warnings.append("No spend/cost column detected; spend set to 0")
-    for fld, label in (("revenue", "revenue"), ("conversions", "conversions"), ("impressions", "impressions"),
-                       ("clicks", "clicks")):
+    for fld, label in (
+        ("revenue", "revenue"),
+        ("conversions", "conversions"),
+        ("impressions", "impressions"),
+        ("clicks", "clicks"),
+    ):
         if not mapping[fld]:
             warnings.append(f"No {label} column detected; {label} set to 0")
 
     default_channel = channel_override or spec.channel
     if fmt_name == "generic" and not mapping["channel"] and not channel_override:
         default_channel = Channel.other
-        warnings.append("No channel column; rows imported as channel 'other' (pass channel=<google|meta|...> to override)")
+        warnings.append(
+            "No channel column; rows imported as channel 'other' (pass channel=<google|meta|...> to override)"
+        )
 
     col_idx = {h: i for i, h in enumerate(headers)}
 
@@ -391,8 +485,8 @@ def parse_csv(
         return row[i] if i is not None and i < len(row) else None
 
     data_rows = lines[h_idx + 1 :]
-    day_first = infer_day_first([cell(r, "day") or "" for r in data_rows[:200]])
-    european = delimiter == ";"
+    european = delimiter == ";"  # semicolon exports come from decimal-comma locales
+    day_first = infer_day_first([cell(r, "day") or "" for r in data_rows[:200]], default=european)
 
     rows: list[dict] = []
     skipped = 0
@@ -402,7 +496,7 @@ def parse_csv(
             skipped += 1
             continue
         first = (row[0] or "").strip()
-        if TOTAL_ROW.match(first) or TOTAL_ROW.match((cell(row, "campaign_name") or "")):
+        if TOTAL_ROW.match(first) or TOTAL_ROW.match(cell(row, "campaign_name") or ""):
             skipped += 1
             continue
         day = parse_day(cell(row, "day"), day_first)

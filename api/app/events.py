@@ -37,10 +37,5 @@ def latest_id(db: Session, workspace_id: int) -> int:
 
 
 def fetch_after(db: Session, workspace_id: int, after_id: int, limit: int = 100) -> list[Event]:
-    stmt = (
-        select(Event)
-        .where(Event.workspace_id == workspace_id, Event.id > after_id)
-        .order_by(Event.id)
-        .limit(limit)
-    )
+    stmt = select(Event).where(Event.workspace_id == workspace_id, Event.id > after_id).order_by(Event.id).limit(limit)
     return list(db.scalars(stmt).all())

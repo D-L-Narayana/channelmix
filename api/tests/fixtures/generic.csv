@@ -1,0 +1,5 @@
+day,channel,campaign,external_id,impressions,clicks,conversions,spend,revenue
+2025-10-01,google,Brand,g-brand,1000,50,3,42.5,120
+2025-10-01,meta,Summer,m-summer,2000,80,4,60,150
+2025-10-02,google,Brand,g-brand,1100,55,4,44,130
+2025-10-02,tiktok,Spark,t-spark,500,20,1,10,20

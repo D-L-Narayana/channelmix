@@ -1,0 +1,15 @@
+# channelmix-api project: only the Python API is deployed from the repo root
+web
+docs
+elk
+scripts
+.github
+api/.venv
+api/.venv312
+api/tests
+api/.pytest_cache
+api/.ruff_cache
+api/Dockerfile
+**/__pycache__
+*.db
+.env

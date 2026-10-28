@@ -5,12 +5,12 @@ Run migrations against the Supabase *session* pooler (port 5432), not the transa
 
 from logging.config import fileConfig
 
-from alembic import context
 from sqlalchemy import text
 
+from alembic import context
+from app import models  # noqa: F401  (register tables)
 from app.config import get_settings
 from app.db import SCHEMA, Base, make_engine
-from app import models  # noqa: F401  (register tables)
 
 config = context.config
 if config.config_file_name is not None:
