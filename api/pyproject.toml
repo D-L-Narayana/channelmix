@@ -1,0 +1,7 @@
+[project]
+name = "channelmix-api"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = ["fastapi", "uvicorn[standard]", "sqlalchemy>=2", "psycopg[binary]", "redis", "pydantic-settings", "python-json-logger"]
+[project.optional-dependencies]
+dev = ["pytest", "pytest-bdd", "httpx", "ruff"]
