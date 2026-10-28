@@ -28,10 +28,11 @@ DAYS = ROWS // CAMPAIGNS
 
 
 def main() -> None:
+    from sqlalchemy import func, select
     from sqlalchemy.orm import sessionmaker
 
-    from app.config import get_settings
     from app.auth import generate_api_key, hash_api_key
+    from app.config import get_settings
     from app.db import Base, init_db, make_engine
     from app.ingest import upsert_metrics
     from app.models import Campaign, Channel, Workspace
@@ -118,9 +119,9 @@ def main() -> None:
     print(f"idem replay : {replay * 1000:6.1f}ms (same key, no write)")
 
     with engine.connect() as conn:
-        from sqlalchemy import text
+        from app.models import DailyMetric
 
-        n = conn.execute(text("SELECT COUNT(*) FROM daily_metrics")).scalar()
+        n = conn.execute(select(func.count()).select_from(DailyMetric)).scalar()
     print(f"rows in table after all phases: {n:,} (no duplicates)")
     assert n == len(rows)
 
